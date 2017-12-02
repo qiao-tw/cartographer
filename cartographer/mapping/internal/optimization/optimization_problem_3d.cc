@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iomanip>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -36,6 +37,7 @@
 #include "cartographer/mapping/internal/optimization/cost_functions/acceleration_cost_function_3d.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/landmark_cost_function_3d.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/rotation_cost_function_3d.h"
+#include "cartographer/mapping/internal/optimization/cost_functions/gps_cost_function.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/spa_cost_function_3d.h"
 #include "cartographer/transform/timestamped_transform.h"
 #include "cartographer/transform/transform.h"
@@ -512,7 +514,12 @@ void OptimizationProblem3D::Solve(
     }
 
     const TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
-    bool fixed_frame_pose_initialized = false;
+
+    // bool fixed_frame_pose_initialized = false;
+    problem.AddParameterBlock(trajectory_data.gps_rotation.data(), 4, new ceres::QuaternionParameterization());
+    const auto& gps_pose_data = trajectory_data.gps_rotation;
+    transform::Rigid3d gps_pose({0., 0., 0.}, {gps_pose_data[3], gps_pose_data[4], gps_pose_data[5], gps_pose_data[6]});
+
     for (; node_it != trajectory_end; ++node_it) {
       const NodeId node_id = node_it->id;
       const NodeSpec3D& node_data = node_it->data;
@@ -526,7 +533,7 @@ void OptimizationProblem3D::Solve(
       const Constraint::Pose constraint_pose{
           *fixed_frame_pose, options_.fixed_frame_pose_translation_weight(),
           options_.fixed_frame_pose_rotation_weight()};
-
+#if 0
       if (!fixed_frame_pose_initialized) {
         transform::Rigid3d fixed_frame_pose_in_map;
         if (trajectory_data.fixed_frame_origin_in_map.has_value()) {
@@ -557,6 +564,14 @@ void OptimizationProblem3D::Solve(
           C_fixed_frames.at(trajectory_id).rotation(),
           C_fixed_frames.at(trajectory_id).translation(),
           C_nodes.at(node_id).rotation(), C_nodes.at(node_id).translation());
+#endif
+      problem.AddResidualBlock(
+            new ceres::AutoDiffCostFunction<GpsCostFunction, 3, 4, 3, 4>(
+              new GpsCostFunction(constraint_pose)),
+            nullptr,
+            C_nodes.at(node_id).rotation(),
+            C_nodes.at(node_id).translation(),
+            trajectory_data.gps_rotation.data());
     }
   }
   // Solve.
@@ -580,6 +595,10 @@ void OptimizationProblem3D::Solve(
                 << " deg (" << imu_calibration[0] << ", " << imu_calibration[1]
                 << ", " << imu_calibration[2] << ", " << imu_calibration[3]
                 << ")";
+      const auto& gps_pose = trajectory_data_[trajectory_id].gps_rotation;
+      LOG(INFO) << "GPS rotation: (" << std::setprecision(15)
+                << gps_pose[0] << ", " << gps_pose[1] << ", "
+                << gps_pose[2] << ", " << gps_pose[3] << ")";
     }
   }
 
