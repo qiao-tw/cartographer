@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iomanip>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -34,6 +35,7 @@
 #include "cartographer/internal/mapping_3d/rotation_cost_function.h"
 #include "cartographer/mapping_3d/ceres_pose.h"
 #include "cartographer/mapping_3d/imu_integration.h"
+#include "cartographer/mapping_3d/pose_graph/gps_cost_function.h"
 #include "cartographer/mapping_3d/pose_graph/spa_cost_function.h"
 #include "cartographer/mapping_3d/rotation_parameterization.h"
 #include "cartographer/transform/timestamped_transform.h"
@@ -374,7 +376,17 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
       continue;
     }
 
-    bool fixed_frame_pose_initialized = false;
+    TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
+    problem.AddParameterBlock(trajectory_data.gps_rotation.data(), 4,
+                              new ceres::QuaternionParameterization());
+
+    const auto& gps_pose_data =
+        trajectory_data.gps_rotation;
+    transform::Rigid3d gps_pose(
+          {0., 0., 0.},
+          {gps_pose_data[3], gps_pose_data[4], gps_pose_data[5], gps_pose_data[6]}
+          );
+
     for (; node_it != trajectory_end; ++node_it) {
       const mapping::NodeId node_id = node_it->id;
       const NodeData& node_data = node_it->data;
@@ -389,28 +401,12 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
           *fixed_frame_pose, options_.fixed_frame_pose_translation_weight(),
           options_.fixed_frame_pose_rotation_weight()};
 
-      if (!fixed_frame_pose_initialized) {
-        const transform::Rigid3d fixed_frame_pose_in_map =
-            node_data.global_pose * constraint_pose.zbar_ij.inverse();
-        C_fixed_frames.emplace_back(
-            transform::Rigid3d(
-                fixed_frame_pose_in_map.translation(),
-                Eigen::AngleAxisd(
-                    transform::GetYaw(fixed_frame_pose_in_map.rotation()),
-                    Eigen::Vector3d::UnitZ())),
-            nullptr,
-            common::make_unique<ceres::AutoDiffLocalParameterization<
-                YawOnlyQuaternionPlus, 4, 1>>(),
-            &problem);
-        fixed_frame_pose_initialized = true;
-      }
-
       problem.AddResidualBlock(
-          new ceres::AutoDiffCostFunction<SpaCostFunction, 6, 4, 3, 4, 3>(
-              new SpaCostFunction(constraint_pose)),
-          nullptr, C_fixed_frames.back().rotation(),
-          C_fixed_frames.back().translation(), C_nodes.at(node_id).rotation(),
-          C_nodes.at(node_id).translation());
+          new ceres::AutoDiffCostFunction<GpsCostFunction, 3, 4, 3, 4>(
+              new GpsCostFunction(constraint_pose)),
+          nullptr, C_nodes.at(node_id).rotation(),
+          C_nodes.at(node_id).translation(),
+          trajectory_data.gps_rotation.data());
     }
   }
 
@@ -435,6 +431,11 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
                 << " deg (" << imu_calibration[0] << ", " << imu_calibration[1]
                 << ", " << imu_calibration[2] << ", " << imu_calibration[3]
                 << ")";
+      const auto& gps_pose =
+          trajectory_data_[trajectory_id].gps_rotation;
+      LOG(INFO) << "GPS rotation: (" << std::setprecision(15)
+                << gps_pose[0] << ", " << gps_pose[1] << ", "
+                << gps_pose[2] << ", " << gps_pose[3] << ")";
     }
   }
 

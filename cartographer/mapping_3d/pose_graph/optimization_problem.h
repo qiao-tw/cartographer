@@ -104,6 +104,7 @@ class OptimizationProblem {
   struct TrajectoryData {
     double gravity_constant = 9.8;
     std::array<double, 4> imu_calibration{{1., 0., 0., 0.}};
+    std::array<double, 4> gps_rotation{{1., 0., 0., 0.}};
   };
 
   mapping::pose_graph::proto::OptimizationProblemOptions options_;
