@@ -45,8 +45,11 @@ class GpsCostFunction {
   static std::array<T, 3> ComputeUnscaledError(
       const transform::Rigid3d& z_gps, const T* const c_rotation,
       const T* const c_translation, const T* const gps_rotation) {
-    const Eigen::Quaternion<T> R_gps_inverse(gps_rotation[0], -gps_rotation[1],
-                                             -gps_rotation[2], -gps_rotation[3]);
+    //const Eigen::Quaternion<T> R_gps_inverse(gps_rotation[0], -gps_rotation[1],
+    //                                         -gps_rotation[2], -gps_rotation[3]);
+    // HACK: only optimize yaw for now.
+    const Eigen::Quaternion<T> R_gps_inverse(gps_rotation[0], (T)0, (T)0,
+                                             -gps_rotation[3]);
     const Eigen::Matrix<T, 3, 1> delta(c_translation[0],
                                        c_translation[1],
                                        c_translation[2]);
