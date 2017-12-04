@@ -57,6 +57,9 @@ message OptimizationProblemOptions {
   // 3D only: activate online IMU extrinsics.
   bool use_online_imu_extrinsics_in_3d = 18;
 
+  // Number of trajectory nodes between each enabled FixedFramePose constraint.
+  uint32 fixed_frame_pose_per_n_nodes = 5566;
+
   // If true, the Ceres solver summary will be logged for every optimization.
   bool log_solver_summary = 5;
 
