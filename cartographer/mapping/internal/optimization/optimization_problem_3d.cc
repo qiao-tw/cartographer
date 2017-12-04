@@ -520,9 +520,17 @@ void OptimizationProblem3D::Solve(
     const auto& gps_pose_data = trajectory_data.gps_rotation;
     transform::Rigid3d gps_pose({0., 0., 0.}, {gps_pose_data[3], gps_pose_data[4], gps_pose_data[5], gps_pose_data[6]});
 
-    for (; node_it != trajectory_end; ++node_it) {
+    for (int node_itx = 0; node_it != trajectory_end; ++node_it) {
       const NodeId node_id = node_it->id;
       const NodeSpec3D& node_data = node_it->data;
+      
+      // Throttle fixed frame pose constraints. This is a bit of a hack as the more
+      // appropriate way is to replace the top loop with an iteration on
+      // fixed_frame_pose_data_. However, since that is indexed by time and nodes
+      // are indexed by IDs it's not easy to just swap them around.
+      if ((node_itx++) % options_.fixed_frame_pose_per_n_nodes() != 0) {
+        continue;
+      }  
 
       const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
           Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);

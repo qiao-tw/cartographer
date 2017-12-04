@@ -71,6 +71,7 @@ POSE_GRAPH = {
     odometry_rotation_weight = 1e5,
     fixed_frame_pose_translation_weight = 1e1,
     fixed_frame_pose_rotation_weight = 1e2,
+    fixed_frame_pose_per_n_nodes = 10,
     log_solver_summary = false,
     use_online_imu_extrinsics_in_3d = true,
     ceres_solver_options = {
