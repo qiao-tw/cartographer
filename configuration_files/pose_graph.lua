@@ -69,6 +69,7 @@ POSE_GRAPH = {
     consecutive_node_rotation_weight = 1e5,
     fixed_frame_pose_translation_weight = 1e1,
     fixed_frame_pose_rotation_weight = 1e2,
+    fixed_frame_pose_per_n_nodes = 10,
     log_solver_summary = false,
     ceres_solver_options = {
       use_nonmonotonic_steps = false,

@@ -38,6 +38,8 @@ proto::OptimizationProblemOptions CreateOptimizationProblemOptions(
       parameter_dictionary->GetDouble("fixed_frame_pose_translation_weight"));
   options.set_fixed_frame_pose_rotation_weight(
       parameter_dictionary->GetDouble("fixed_frame_pose_rotation_weight"));
+  options.set_fixed_frame_pose_per_n_nodes(
+        parameter_dictionary->GetInt("fixed_frame_pose_per_n_nodes"));
   options.set_log_solver_summary(
       parameter_dictionary->GetBool("log_solver_summary"));
   *options.mutable_ceres_solver_options() =
