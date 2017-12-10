@@ -23,4 +23,5 @@ TRAJECTORY_BUILDER = {
 --  },
   collate_fixed_frame = true,
   collate_landmarks = false,
+  itri_num_submaps_to_keep = 0,
 }
