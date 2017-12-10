@@ -80,6 +80,24 @@ class PureLocalizationTrimmer : public PoseGraphTrimmer {
   bool finished_ = false;
 };
 
+// Keeps the last 'num_submaps_to_keep' of the trajectory with 'trajectory_id'
+// and the nearby pose within .
+class ItriTrimmer : public PoseGraphTrimmer {
+ public:
+  ItriTrimmer(int trajectory_id, int num_submaps_to_keep);
+  ~ItriTrimmer() override {}
+
+  void Trim(Trimmable* pose_graph) override;
+  bool IsFinished() override;
+
+ private:
+  const int trajectory_id_;
+  double distance_to_keep_;
+  int num_submaps_to_keep_;
+  int num_submaps_trimmed_ = 0;
+  bool finished_ = false;
+};
+
 }  // namespace mapping
 }  // namespace cartographer
 
