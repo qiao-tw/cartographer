@@ -32,5 +32,6 @@ message TrajectoryBuilderOptions {
   mapping_3d.proto.LocalTrajectoryBuilderOptions
       trajectory_builder_3d_options = 2;
   bool pure_localization = 3;
-  InitialTrajectoryPose initial_trajectory_pose = 4;
+  int32 itri_num_submaps_to_keep = 4;
+  InitialTrajectoryPose initial_trajectory_pose = 5;
 }

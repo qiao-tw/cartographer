@@ -172,7 +172,6 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
 
   // Set the starting point.
   CHECK(!submap_data_.empty());
-  CHECK(submap_data_.Contains(mapping::SubmapId{0, 0}));
   mapping::MapById<mapping::SubmapId, CeresPose> C_submaps;
   mapping::MapById<mapping::NodeId, CeresPose> C_nodes;
   bool first_submap = true;

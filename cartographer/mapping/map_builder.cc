@@ -107,6 +107,13 @@ int MapBuilder::AddTrajectoryBuilder(
     pose_graph_->AddTrimmer(common::make_unique<PureLocalizationTrimmer>(
         trajectory_id, kSubmapsToKeep));
   }
+
+  if ( 0 < trajectory_options.itri_num_submaps_to_keep() ) {
+    int32 kSubmapsToKeep = trajectory_options.itri_num_submaps_to_keep();
+    pose_graph_->AddTrimmer(common::make_unique<ItriTrimmer>(
+        trajectory_id, kSubmapsToKeep));
+  }
+
   if (trajectory_options.has_initial_trajectory_pose()) {
     const auto& initial_trajectory_pose =
         trajectory_options.initial_trajectory_pose();
