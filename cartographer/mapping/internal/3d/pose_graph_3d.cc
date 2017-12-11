@@ -146,8 +146,18 @@ NodeId PoseGraph3D::AddNode(
   const bool newly_finished_submap =
       insertion_submaps.front()->insertion_finished();
   AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
-    return ComputeConstraintsForNode(node_id, insertion_submaps,
-                                     newly_finished_submap);
+    // return ComputeConstraintsForNode(node_id, insertion_submaps,
+    //                                 newly_finished_submap);
+    auto submap_ids = ComputeEarlyOptimizationForNode(
+          node_id,
+          insertion_submaps,
+          newly_finished_submap);
+    AddLoopClosureWorkItemForTrajectory(
+          trajectory_id,
+          [=]() REQUIRES(mutex_) {
+      FindLoopClosureConstraintsForNode(node_id);
+    });
+    return WorkItem::Result::kDoNotRunOptimization; // not sure if here should run optimization
   });
   return node_id;
 }
@@ -169,6 +179,17 @@ void PoseGraph3D::AddWorkItem(
           .count());
 }
 
+void PoseGraph::AddLoopClosureWorkItemForTrajectory(
+    const int trajectory_id,
+    const std::function<void()>& work_item) {
+  if (loop_closure_work_queue_.count(trajectory_id) == 0) {
+    loop_closure_work_queue_.emplace(
+          trajectory_id,
+          common::make_unique<std::deque<std::function<void()>>>());
+  }
+  loop_closure_work_queue_[trajectory_id]->push_back(work_item);
+}
+
 void PoseGraph3D::AddTrajectoryIfNeeded(const int trajectory_id) {
   data_.trajectories_state[trajectory_id];
   CHECK(data_.trajectories_state.at(trajectory_id).state !=
@@ -183,6 +204,14 @@ void PoseGraph3D::AddTrajectoryIfNeeded(const int trajectory_id) {
     global_localization_samplers_[trajectory_id] =
         absl::make_unique<common::FixedRatioSampler>(
             options_.global_sampling_ratio());
+  }
+  if (loop_closure_work_queue_.count(trajectory_id) == 0) {
+    loop_closure_work_queue_.emplace(
+          trajectory_id,
+          common::make_unique<std::deque<std::function<void()>>>());
+  }
+  if (trajectory_finish_states_.count(trajectory_id) == 0) {
+    trajectory_finish_states_.emplace(trajectory_id, false);
   }
 }
 
@@ -377,6 +406,98 @@ WorkItem::Result PoseGraph3D::ComputeConstraintsForNode(
     return WorkItem::Result::kRunOptimization;
   }
   return WorkItem::Result::kDoNotRunOptimization;
+}
+
+const std::vector<mapping::SubmapId> PoseGraph3D::ComputeEarlyOptimizationForNode(
+    const mapping::NodeId& node_id,
+    std::vector<std::shared_ptr<const Submap>> insertion_submaps,
+    const bool newly_finished_submap) {
+  const auto& constant_data = trajectory_nodes_.at(node_id).constant_data;
+  const std::vector<mapping::SubmapId> submap_ids = InitializeGlobalSubmapPoses(
+      node_id.trajectory_id, constant_data->time, insertion_submaps);
+  CHECK_EQ(submap_ids.size(), insertion_submaps.size());
+  const mapping::SubmapId matching_id = submap_ids.front();
+  const transform::Rigid3d& local_pose = constant_data->local_pose;
+  const transform::Rigid3d global_pose =
+      optimization_problem_.submap_data().at(matching_id).global_pose *
+      insertion_submaps.front()->local_pose().inverse() * local_pose;
+  optimization_problem_.AddTrajectoryNode(
+      matching_id.trajectory_id, constant_data->time, local_pose, global_pose);
+  for (size_t i = 0; i < insertion_submaps.size(); ++i) {
+    const mapping::SubmapId submap_id = submap_ids[i];
+    // Even if this was the last node added to 'submap_id', the submap will only
+    // be marked as finished in 'submap_data_' further below.
+    CHECK(submap_data_.at(submap_id).state == SubmapState::kActive);
+    submap_data_.at(submap_id).node_ids.emplace(node_id);
+    const transform::Rigid3d constraint_transform =
+        insertion_submaps[i]->local_pose().inverse() * local_pose;
+    constraints_.push_back(
+        Constraint{submap_id,
+                   node_id,
+                   {constraint_transform, options_.matcher_translation_weight(),
+                    options_.matcher_rotation_weight()},
+                   Constraint::INTRA_SUBMAP});
+  }
+   if (newly_finished_submap) {
+    const mapping::SubmapId finished_submap_id = submap_ids.front();
+    SubmapData& finished_submap_data = submap_data_.at(finished_submap_id);
+    CHECK(finished_submap_data.state == SubmapState::kActive);
+    finished_submap_data.state = SubmapState::kFinished;
+  }
+   // constraint_builder_.NotifyEndOfNode();
+  ++num_nodes_since_last_loop_closure_;
+  if (options_.optimize_every_n_nodes() > 0 &&
+      num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
+    CHECK(!run_loop_closure_);
+    run_loop_closure_ = true;
+    // If there is a 'work_queue_' already, some other thread will take care.
+    if (work_queue_ == nullptr) {
+      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
+      HandleWorkQueue();
+    }
+  }
+   return submap_ids;
+}
+ void PoseGraph::FindLoopClosureConstraintsForNode(
+    const mapping::NodeId& node_id) {
+  for (const auto& submap_id_data : submap_data_) {
+    // FIXME: breaks multiple trajectories!
+    /*
+    if (submap_id_data.data.node_ids.count(node_id) != 0) { // Node on submap
+      if (submap_id_data.data.state != SubmapState::kFinished) {
+        // Set submap to finished, assuming FindLoopClosureConstraintsForNode
+        // is only called at FinishTrajectory()
+        submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
+        LOG(INFO) << "ComputeConstraintsForOldNodes(" << submap_id_data.id
+                  << ")";
+        ComputeConstraintsForOldNodes(submap_id_data.id);
+      }
+    }
+    */
+    if (submap_id_data.data.node_ids.count(node_id) == 0 &&
+        submap_id_data.data.state == SubmapState::kFinished) {
+      // Node is not on this submap
+      LOG(INFO) << "ComputeConstraint(" << node_id << ", " << submap_id_data.id
+                << ")";
+      ComputeConstraint(node_id, submap_id_data.id);
+    }
+    //}
+    //else {
+    //  LOG(INFO) << "submap " << submap_id_data.id << " is not finished!";
+    //}
+  }
+   constraint_builder_.NotifyEndOfNode();
+  ++num_nodes_since_last_loop_closure_;
+  if (options_.optimize_every_n_nodes() > 0 &&
+      num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
+    CHECK(!run_loop_closure_);
+    run_loop_closure_ = true;
+    // If there is a 'work_queue_' already, some other thread will take care.
+    if (work_queue_ == nullptr) {
+      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
+      HandleWorkQueue();
+    }
+  }
 }
 
 common::Time PoseGraph3D::GetLatestNodeTime(const NodeId& node_id,
