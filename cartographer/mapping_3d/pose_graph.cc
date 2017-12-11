@@ -43,9 +43,14 @@ PoseGraph::PoseGraph(const mapping::proto::PoseGraphOptions& options,
     : options_(options),
       optimization_problem_(options_.optimization_problem_options(),
                             pose_graph::OptimizationProblem::FixZ::kNo),
-      constraint_builder_(options_.constraint_builder_options(), thread_pool) {}
+      constraint_builder_(options_.constraint_builder_options(), thread_pool) {
+}
 
 PoseGraph::~PoseGraph() {
+  //{
+  //  common::MutexLocker locker(&mutex_);
+  //  loop_closure_lock_.clear();
+  //}
   WaitForAllComputations();
   common::MutexLocker locker(&mutex_);
   CHECK(work_queue_ == nullptr);
@@ -124,8 +129,17 @@ mapping::NodeId PoseGraph::AddNode(
   // execute the lambda.
   const bool newly_finished_submap = insertion_submaps.front()->finished();
   AddWorkItem([=]() REQUIRES(mutex_) {
-    ComputeConstraintsForNode(node_id, insertion_submaps,
-                              newly_finished_submap);
+    //ComputeConstraintsForNode(node_id, insertion_submaps,
+    //                          newly_finished_submap);
+    auto submap_ids = ComputeEarlyOptimizationForNode(
+          node_id,
+          insertion_submaps,
+          newly_finished_submap);
+    AddLoopClosureWorkItemForTrajectory(
+          trajectory_id,
+          [=]() REQUIRES(mutex_) {
+      FindLoopClosureConstraintsForNode(node_id);
+    });
   });
   return node_id;
 }
@@ -138,6 +152,17 @@ void PoseGraph::AddWorkItem(const std::function<void()>& work_item) {
   }
 }
 
+void PoseGraph::AddLoopClosureWorkItemForTrajectory(
+    const int trajectory_id,
+    const std::function<void()>& work_item) {
+  if (loop_closure_work_queue_.count(trajectory_id) == 0) {
+    loop_closure_work_queue_.emplace(
+          trajectory_id,
+          common::make_unique<std::deque<std::function<void()>>>());
+  }
+  loop_closure_work_queue_[trajectory_id]->push_back(work_item);
+}
+
 void PoseGraph::AddTrajectoryIfNeeded(const int trajectory_id) {
   trajectory_connectivity_state_.Add(trajectory_id);
   // Make sure we have a sampler for this trajectory.
@@ -145,6 +170,14 @@ void PoseGraph::AddTrajectoryIfNeeded(const int trajectory_id) {
     global_localization_samplers_[trajectory_id] =
         common::make_unique<common::FixedRatioSampler>(
             options_.global_sampling_ratio());
+  }
+  if (loop_closure_work_queue_.count(trajectory_id) == 0) {
+    loop_closure_work_queue_.emplace(
+          trajectory_id,
+          common::make_unique<std::deque<std::function<void()>>>());
+  }
+  if (trajectory_finish_states_.count(trajectory_id) == 0) {
+    trajectory_finish_states_.emplace(trajectory_id, false);
   }
 }
 
@@ -298,6 +331,103 @@ void PoseGraph::ComputeConstraintsForNode(
   }
 }
 
+const std::vector<mapping::SubmapId> PoseGraph::ComputeEarlyOptimizationForNode(
+    const mapping::NodeId& node_id,
+    std::vector<std::shared_ptr<const Submap>> insertion_submaps,
+    const bool newly_finished_submap) {
+  const auto& constant_data = trajectory_nodes_.at(node_id).constant_data;
+  const std::vector<mapping::SubmapId> submap_ids = InitializeGlobalSubmapPoses(
+      node_id.trajectory_id, constant_data->time, insertion_submaps);
+  CHECK_EQ(submap_ids.size(), insertion_submaps.size());
+  const mapping::SubmapId matching_id = submap_ids.front();
+  const transform::Rigid3d& local_pose = constant_data->local_pose;
+  const transform::Rigid3d global_pose =
+      optimization_problem_.submap_data().at(matching_id).global_pose *
+      insertion_submaps.front()->local_pose().inverse() * local_pose;
+  optimization_problem_.AddTrajectoryNode(
+      matching_id.trajectory_id, constant_data->time, local_pose, global_pose);
+  for (size_t i = 0; i < insertion_submaps.size(); ++i) {
+    const mapping::SubmapId submap_id = submap_ids[i];
+    // Even if this was the last node added to 'submap_id', the submap will only
+    // be marked as finished in 'submap_data_' further below.
+    CHECK(submap_data_.at(submap_id).state == SubmapState::kActive);
+    submap_data_.at(submap_id).node_ids.emplace(node_id);
+    const transform::Rigid3d constraint_transform =
+        insertion_submaps[i]->local_pose().inverse() * local_pose;
+    constraints_.push_back(
+        Constraint{submap_id,
+                   node_id,
+                   {constraint_transform, options_.matcher_translation_weight(),
+                    options_.matcher_rotation_weight()},
+                   Constraint::INTRA_SUBMAP});
+  }
+
+  if (newly_finished_submap) {
+    const mapping::SubmapId finished_submap_id = submap_ids.front();
+    SubmapData& finished_submap_data = submap_data_.at(finished_submap_id);
+    CHECK(finished_submap_data.state == SubmapState::kActive);
+    finished_submap_data.state = SubmapState::kFinished;
+  }
+
+  // constraint_builder_.NotifyEndOfNode();
+  ++num_nodes_since_last_loop_closure_;
+  if (options_.optimize_every_n_nodes() > 0 &&
+      num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
+    CHECK(!run_loop_closure_);
+    run_loop_closure_ = true;
+    // If there is a 'work_queue_' already, some other thread will take care.
+    if (work_queue_ == nullptr) {
+      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
+      HandleWorkQueue();
+    }
+  }
+
+  return submap_ids;
+}
+
+void PoseGraph::FindLoopClosureConstraintsForNode(
+    const mapping::NodeId& node_id) {
+  for (const auto& submap_id_data : submap_data_) {
+    // FIXME: breaks multiple trajectories!
+    /*
+    if (submap_id_data.data.node_ids.count(node_id) != 0) { // Node on submap
+      if (submap_id_data.data.state != SubmapState::kFinished) {
+        // Set submap to finished, assuming FindLoopClosureConstraintsForNode
+        // is only called at FinishTrajectory()
+        submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
+        LOG(INFO) << "ComputeConstraintsForOldNodes(" << submap_id_data.id
+                  << ")";
+        ComputeConstraintsForOldNodes(submap_id_data.id);
+      }
+    }
+    */
+    if (submap_id_data.data.node_ids.count(node_id) == 0 &&
+        submap_id_data.data.state == SubmapState::kFinished) {
+      // Node is not on this submap
+      LOG(INFO) << "ComputeConstraint(" << node_id << ", " << submap_id_data.id
+                << ")";
+      ComputeConstraint(node_id, submap_id_data.id);
+    }
+    //}
+    //else {
+    //  LOG(INFO) << "submap " << submap_id_data.id << " is not finished!";
+    //}
+  }
+
+  constraint_builder_.NotifyEndOfNode();
+  ++num_nodes_since_last_loop_closure_;
+  if (options_.optimize_every_n_nodes() > 0 &&
+      num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
+    CHECK(!run_loop_closure_);
+    run_loop_closure_ = true;
+    // If there is a 'work_queue_' already, some other thread will take care.
+    if (work_queue_ == nullptr) {
+      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
+      HandleWorkQueue();
+    }
+  }
+}
+
 common::Time PoseGraph::GetLatestNodeTime(
     const mapping::NodeId& node_id, const mapping::SubmapId& submap_id) const {
   common::Time time = trajectory_nodes_.at(node_id).constant_data->time;
@@ -323,16 +453,20 @@ void PoseGraph::UpdateTrajectoryConnectivity(const Constraint& constraint) {
 void PoseGraph::HandleWorkQueue() {
   constraint_builder_.WhenDone(
       [this](const pose_graph::ConstraintBuilder::Result& result) {
+        LOG(INFO) << "WhenDone callback invoked";
         {
           common::MutexLocker locker(&mutex_);
           constraints_.insert(constraints_.end(), result.begin(), result.end());
         }
+        LOG(INFO) << "LOCKED(1) WhenDone callback";
         RunOptimization();
 
         common::MutexLocker locker(&mutex_);
+        LOG(INFO) << "LOCKED(2) WhenDone callback";
         for (const Constraint& constraint : result) {
           UpdateTrajectoryConnectivity(constraint);
         }
+        LOG(INFO) << "(3) WhenDone callback";
         TrimmingHandle trimming_handle(this);
         for (auto& trimmer : trimmers_) {
           trimmer->Trim(&trimming_handle);
@@ -344,11 +478,14 @@ void PoseGraph::HandleWorkQueue() {
                   return trimmer->IsFinished();
                 }),
             trimmers_.end());
+        LOG(INFO) << "(4) WhenDone callback";
 
         num_nodes_since_last_loop_closure_ = 0;
         run_loop_closure_ = false;
         while (!run_loop_closure_) {
+          LOG(INFO) << "(5) WhenDone callback";
           if (work_queue_->empty()) {
+            LOG(INFO) << "(6) WhenDone callback";
             work_queue_.reset();
             return;
           }
@@ -363,11 +500,16 @@ void PoseGraph::HandleWorkQueue() {
 
 void PoseGraph::WaitForAllComputations() {
   bool notification = false;
+  LOG(INFO) << "Waiting for all computations...";
   common::MutexLocker locker(&mutex_);
+  LOG(INFO) << "LOCKED Waiting for all computations...";
   const int num_finished_nodes_at_start =
       constraint_builder_.GetNumFinishedNodes();
   while (!locker.AwaitWithTimeout(
       [this]() REQUIRES(mutex_) {
+        LOG(INFO) << "NumFinishedNodes = "
+           << constraint_builder_.GetNumFinishedNodes()
+           << "; num_trajectory_nodes_ = " << num_trajectory_nodes_;
         return constraint_builder_.GetNumFinishedNodes() ==
                num_trajectory_nodes_;
       },
@@ -385,25 +527,104 @@ void PoseGraph::WaitForAllComputations() {
   constraint_builder_.WhenDone(
       [this,
        &notification](const pose_graph::ConstraintBuilder::Result& result) {
+        LOG(INFO) << "WaitForAllComputations callback";
         common::MutexLocker locker(&mutex_);
+        LOG(INFO) << "LOCKED WaitForAllComputations callback";
         constraints_.insert(constraints_.end(), result.begin(), result.end());
         notification = true;
       });
+  LOG(INFO) << "WaitForAllComputations waiting";
   locker.Await([&notification]() { return notification; });
+  LOG(INFO) << "DONE WaitForAllComputations";
 }
 
 void PoseGraph::FinishTrajectory(const int trajectory_id) {
-  AddWorkItem([this, trajectory_id]() REQUIRES(mutex_) {
-    CHECK_EQ(finished_trajectories_.count(trajectory_id), 0);
-    finished_trajectories_.insert(trajectory_id);
+    // TODO(jihoonl): Add a logic to notify trimmers to finish the given
+    // trajectory.
+    trajectory_finish_states_[trajectory_id] = true;
+    bool all_trajectories_finished = true;
+    if (loop_closure_work_queue_.count(trajectory_id) != 0) {
+      common::MutexLocker locker(&mutex_);
 
-    auto submap_data = optimization_problem_.submap_data();
-    for (auto submap_id_data : submap_data) {
-      submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
+      for (const auto& submap_id_data : submap_data_) {
+        // Set all submaps for this trajectory to finished
+        if (submap_id_data.id.trajectory_id == trajectory_id) {
+          submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
+        }
+      }
+
+      if (work_queue_ == nullptr) {
+        work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
+      }
+      for (auto workItem : *loop_closure_work_queue_[trajectory_id]) {
+        work_queue_->push_back(workItem);
+      }
+      loop_closure_work_queue_.erase(trajectory_id);
     }
-    // TODO(jihoonl): Refactor HandleWorkQueue() logic from
-    // ComputeConstraintsForNode and call from here
-  });
+    {
+      common::MutexLocker locker(&mutex_);
+      for (const auto& finished : trajectory_finish_states_) {
+        all_trajectories_finished &= finished.second;
+      }
+      /*
+      if (all_trajectories_finished) {
+        // Should only call WaitForAllComputations() on the last trajectory,
+        // or it's going to deadlock!
+        AddWorkItem([=]() REQUIRES(mutex_) {
+          LOG(INFO) << "Waiting for all computations...";
+          WaitForAllComputations(); // Can't be in a WorkItem, or it's deadlock!
+          LOG(INFO) << "Running optimization...";
+          RunOptimization();
+          LOG(INFO) << "DONE running optimization";
+        });
+      }
+      */
+    }
+
+    /*
+    {
+      common::MutexLocker locker(&mutex_);
+      if (work_queue_ == nullptr) {
+        work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
+      }
+      for (const auto& submap_id_data : submap_data_) {
+        submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
+        LOG(INFO) << "Scheduling loop closure detection for submap "
+                  << submap_id_data.id;
+        AddWorkItem([=]() REQUIRES(mutex_) {
+            LOG(INFO) << "Starting loop closure detection for submap "
+                      << submap_id_data.id;
+            ComputeConstraintsForOldNodes(submap_id_data.id);
+            LOG(INFO) << "Handling work queue for submap "
+                      << submap_id_data.id;
+         });
+      }
+      bool all_trajectories_finished = true;
+      for (const auto& finished : trajectory_finish_states_) {
+        all_trajectories_finished &= finished.second;
+      }
+      if (all_trajectories_finished) {
+        // Should only call WaitForAllComputations() on the last trajectory;
+        // or it's going to deadlock!
+        AddWorkItem([=]() REQUIRES(mutex_) {
+          //LOG(INFO) << "Waiting for all computations...";
+          //WaitForAllComputations();
+          //LOG(INFO) << "Running optimization...";
+          //RunOptimization();
+          //LOG(INFO) << "DONE running optimization";
+        });
+      }
+    }
+    */
+    HandleWorkQueue();
+    if (all_trajectories_finished) {
+      // Should only call WaitForAllComputations() on the last trajectory,
+      // or it's going to deadlock!
+      WaitForAllComputations();
+      LOG(INFO) << "Running optimization...";
+      RunOptimization();
+      LOG(INFO) << "DONE running optimization";
+    }
 }
 
 bool PoseGraph::IsTrajectoryFinished(const int trajectory_id) {
