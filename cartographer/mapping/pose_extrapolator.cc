@@ -173,10 +173,13 @@ void PoseExtrapolator::UpdateVelocitiesFromPoses() {
   const transform::Rigid3d& oldest_pose = oldest_timed_pose.pose;
   linear_velocity_from_poses_ =
       (newest_pose.translation() - oldest_pose.translation()) / queue_delta;
+  linear_velocity_from_poses_(2) = 0.; // HACK: clamp to planar translation
   angular_velocity_from_poses_ =
       transform::RotationQuaternionToAngleAxisVector(
           oldest_pose.rotation().inverse() * newest_pose.rotation()) /
       queue_delta;
+  angular_velocity_from_poses_(0) = 0.; // HACK: clamp to yaw only
+  // (these don't seem effective at all)
 }
 
 void PoseExtrapolator::TrimImuData() {

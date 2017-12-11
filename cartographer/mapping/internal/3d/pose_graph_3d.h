@@ -168,7 +168,12 @@ class PoseGraph3D : public PoseGraph {
   // Handles a new work item.
   void AddWorkItem(const std::function<WorkItem::Result()>& work_item)
       LOCKS_EXCLUDED(mutex_) LOCKS_EXCLUDED(work_queue_mutex_);
-
+  
+  // Handles a new loop closure work item for a trajectory.
+  void AddLoopClosureWorkItemForTrajectory(
+      const int trajectory_id,
+      const std::function<void()>& work_item) REQUIRES(mutex_);
+  
   // Adds connectivity and sampler for a trajectory if it does not exist.
   void AddTrajectoryIfNeeded(int trajectory_id)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -193,6 +198,16 @@ class PoseGraph3D : public PoseGraph {
       std::vector<std::shared_ptr<const Submap3D>> insertion_submaps,
       bool newly_finished_submap) LOCKS_EXCLUDED(mutex_);
 
+  // Trigger optimization for a node without starting scan matching.
+  const std::vector<mapping::SubmapId> ComputeEarlyOptimizationForNode(
+      const mapping::NodeId& node_id,
+      std::vector<std::shared_ptr<const Submap>> insertion_submaps,
+      bool newly_finished_submap) REQUIRES(mutex_);
+  
+  // Trigger scan matching for a node.
+  void FindLoopClosureConstraintsForNode(
+      const mapping::NodeId& node_id) REQUIRES(mutex_);
+  
   // Computes constraints for a node and submap pair.
   void ComputeConstraint(const NodeId& node_id, const SubmapId& submap_id)
       LOCKS_EXCLUDED(mutex_);
@@ -247,6 +262,11 @@ class PoseGraph3D : public PoseGraph {
   // considered later.
   std::unique_ptr<WorkQueue> work_queue_ GUARDED_BY(work_queue_mutex_);
 
+  std::unordered_map<int,
+  std::unique_ptr<std::deque<std::function<void()>>>>loop_closure_work_queue_
+      GUARDED_BY(mutex_);
+  // Keeps track of whether each trajectory is finished.
+  std::unordered_map<int, bool> trajectory_finish_states_;
   // We globally localize a fraction of the nodes from each trajectory.
   std::unordered_map<int, std::unique_ptr<common::FixedRatioSampler>>
       global_localization_samplers_ GUARDED_BY(mutex_);
