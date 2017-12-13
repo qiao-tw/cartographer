@@ -110,7 +110,9 @@ void ConstraintBuilder::NotifyEndOfNode() {
 
 void ConstraintBuilder::WhenDone(
     const std::function<void(const ConstraintBuilder::Result&)>& callback) {
+  LOG(INFO) << "WhenDone";
   common::MutexLocker locker(&mutex_);
+  LOG(INFO) << "LOCKED WhenDone";
   CHECK(when_done_ == nullptr);
   when_done_ =
       common::make_unique<std::function<void(const Result&)>>(callback);
@@ -261,7 +263,9 @@ void ConstraintBuilder::FinishComputation(const int computation_index) {
   Result result;
   std::unique_ptr<std::function<void(const Result&)>> callback;
   {
+    LOG(INFO) << "FinishComputation";
     common::MutexLocker locker(&mutex_);
+    LOG(INFO) << "LOCKED FinishComputation";
     if (--pending_computations_[computation_index] == 0) {
       pending_computations_.erase(computation_index);
     }
@@ -288,6 +292,9 @@ void ConstraintBuilder::FinishComputation(const int computation_index) {
         when_done_.reset();
       }
     }
+    LOG(INFO) << "pending_computations_.size() = "
+              << pending_computations_.size()
+              << "; callback " << (callback == nullptr ? "is null" : "is set");
   }
   if (callback != nullptr) {
     (*callback)(result);
