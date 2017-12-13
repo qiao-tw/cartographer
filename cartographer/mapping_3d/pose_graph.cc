@@ -172,10 +172,12 @@ void PoseGraph::AddTrajectoryIfNeeded(const int trajectory_id) {
         common::make_unique<common::FixedRatioSampler>(
             options_.global_sampling_ratio());
   }
-  if (loop_closure_work_queue_.count(trajectory_id) == 0) {
-    loop_closure_work_queue_.emplace(
-          trajectory_id,
-          common::make_unique<std::deque<std::function<void()>>>());
+  if (options_.defer_loop_closure_detection()) {
+    if (loop_closure_work_queue_.count(trajectory_id) == 0) {
+      loop_closure_work_queue_.emplace(
+            trajectory_id,
+            common::make_unique<std::deque<std::function<void()>>>());
+    }
   }
   if (trajectory_finish_states_.count(trajectory_id) == 0) {
     trajectory_finish_states_.emplace(trajectory_id, false);
