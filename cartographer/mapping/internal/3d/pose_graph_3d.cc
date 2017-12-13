@@ -145,20 +145,25 @@ NodeId PoseGraph3D::AddNode(
   // execute the lambda.
   const bool newly_finished_submap =
       insertion_submaps.front()->insertion_finished();
-  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
-    // return ComputeConstraintsForNode(node_id, insertion_submaps,
-    //                                 newly_finished_submap);
-    auto submap_ids = ComputeEarlyOptimizationForNode(
-          node_id,
-          insertion_submaps,
-          newly_finished_submap);
-    AddLoopClosureWorkItemForTrajectory(
-          trajectory_id,
-          [=]() REQUIRES(mutex_) {
-      FindLoopClosureConstraintsForNode(node_id);
+  if (options_.defer_loop_closure_detection()) {
+    AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
+      auto submap_ids = ComputeEarlyOptimizationForNode(
+            node_id,
+            insertion_submaps,
+            newly_finished_submap);
+      AddLoopClosureWorkItemForTrajectory(
+            trajectory_id,
+            [=]() REQUIRES(mutex_) {
+        FindLoopClosureConstraintsForNode(node_id);
+      });
+      return WorkItem::Result::kDoNotRunOptimization; // not sure if here should run optimization
+    });    
+  } else {
+    AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
+      return ComputeConstraintsForNode(node_id, insertion_submaps,
+                                       newly_finished_submap);
     });
-    return WorkItem::Result::kDoNotRunOptimization; // not sure if here should run optimization
-  });
+  }
   return node_id;
 }
 
