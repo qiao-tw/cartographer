@@ -507,8 +507,10 @@ void PoseGraph::FinishTrajectory(const int trajectory_id) {
   // trajectory.
   trajectory_finish_states_[trajectory_id] = true;
   bool all_trajectories_finished = true;
+  bool work_queue_empty = false;
   if (loop_closure_work_queue_.count(trajectory_id) != 0) {
     common::MutexLocker locker(&mutex_);
+    work_queue_empty = work_queue_ == nullptr || work_queue_->empty();
 
     for (const auto& submap_id_data : submap_data_) {
       // Set all submaps for this trajectory to finished
@@ -531,7 +533,9 @@ void PoseGraph::FinishTrajectory(const int trajectory_id) {
       all_trajectories_finished &= finished.second;
     }
   }
-  HandleWorkQueue();
+  if (work_queue_empty) {
+    HandleWorkQueue();
+  }
   if (all_trajectories_finished) {
     // Should only call WaitForAllComputations() on the last trajectory,
     // or it's going to deadlock!
