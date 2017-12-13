@@ -47,10 +47,6 @@ PoseGraph::PoseGraph(const mapping::proto::PoseGraphOptions& options,
 }
 
 PoseGraph::~PoseGraph() {
-  //{
-  //  common::MutexLocker locker(&mutex_);
-  //  loop_closure_lock_.clear();
-  //}
   WaitForAllComputations();
   common::MutexLocker locker(&mutex_);
   CHECK(work_queue_ == nullptr);
@@ -374,7 +370,6 @@ const std::vector<mapping::SubmapId> PoseGraph::ComputeEarlyOptimizationForNode(
     finished_submap_data.state = SubmapState::kFinished;
   }
 
-  // constraint_builder_.NotifyEndOfNode();
   ++num_nodes_since_last_loop_closure_;
   if (options_.optimize_every_n_nodes() > 0 &&
       num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
@@ -393,30 +388,10 @@ const std::vector<mapping::SubmapId> PoseGraph::ComputeEarlyOptimizationForNode(
 void PoseGraph::FindLoopClosureConstraintsForNode(
     const mapping::NodeId& node_id) {
   for (const auto& submap_id_data : submap_data_) {
-    // FIXME: breaks multiple trajectories!
-    /*
-    if (submap_id_data.data.node_ids.count(node_id) != 0) { // Node on submap
-      if (submap_id_data.data.state != SubmapState::kFinished) {
-        // Set submap to finished, assuming FindLoopClosureConstraintsForNode
-        // is only called at FinishTrajectory()
-        submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
-        LOG(INFO) << "ComputeConstraintsForOldNodes(" << submap_id_data.id
-                  << ")";
-        ComputeConstraintsForOldNodes(submap_id_data.id);
-      }
-    }
-    */
     if (submap_id_data.data.node_ids.count(node_id) == 0 &&
         submap_id_data.data.state == SubmapState::kFinished) {
-      // Node is not on this submap
-      LOG(INFO) << "ComputeConstraint(" << node_id << ", " << submap_id_data.id
-                << ")";
       ComputeConstraint(node_id, submap_id_data.id);
     }
-    //}
-    //else {
-    //  LOG(INFO) << "submap " << submap_id_data.id << " is not finished!";
-    //}
   }
 
   constraint_builder_.NotifyEndOfNode();
@@ -458,20 +433,16 @@ void PoseGraph::UpdateTrajectoryConnectivity(const Constraint& constraint) {
 void PoseGraph::HandleWorkQueue() {
   constraint_builder_.WhenDone(
       [this](const pose_graph::ConstraintBuilder::Result& result) {
-        LOG(INFO) << "WhenDone callback invoked";
         {
           common::MutexLocker locker(&mutex_);
           constraints_.insert(constraints_.end(), result.begin(), result.end());
         }
-        LOG(INFO) << "LOCKED(1) WhenDone callback";
         RunOptimization();
 
         common::MutexLocker locker(&mutex_);
-        LOG(INFO) << "LOCKED(2) WhenDone callback";
         for (const Constraint& constraint : result) {
           UpdateTrajectoryConnectivity(constraint);
         }
-        LOG(INFO) << "(3) WhenDone callback";
         TrimmingHandle trimming_handle(this);
         for (auto& trimmer : trimmers_) {
           trimmer->Trim(&trimming_handle);
@@ -483,14 +454,11 @@ void PoseGraph::HandleWorkQueue() {
                   return trimmer->IsFinished();
                 }),
             trimmers_.end());
-        LOG(INFO) << "(4) WhenDone callback";
 
         num_nodes_since_last_loop_closure_ = 0;
         run_loop_closure_ = false;
         while (!run_loop_closure_) {
-          LOG(INFO) << "(5) WhenDone callback";
           if (work_queue_->empty()) {
-            LOG(INFO) << "(6) WhenDone callback";
             work_queue_.reset();
             return;
           }
@@ -505,16 +473,11 @@ void PoseGraph::HandleWorkQueue() {
 
 void PoseGraph::WaitForAllComputations() {
   bool notification = false;
-  LOG(INFO) << "Waiting for all computations...";
   common::MutexLocker locker(&mutex_);
-  LOG(INFO) << "LOCKED Waiting for all computations...";
   const int num_finished_nodes_at_start =
       constraint_builder_.GetNumFinishedNodes();
   while (!locker.AwaitWithTimeout(
       [this]() REQUIRES(mutex_) {
-        LOG(INFO) << "NumFinishedNodes = "
-           << constraint_builder_.GetNumFinishedNodes()
-           << "; num_trajectory_nodes_ = " << num_trajectory_nodes_;
         return constraint_builder_.GetNumFinishedNodes() ==
                num_trajectory_nodes_;
       },
@@ -532,15 +495,11 @@ void PoseGraph::WaitForAllComputations() {
   constraint_builder_.WhenDone(
       [this,
        &notification](const pose_graph::ConstraintBuilder::Result& result) {
-        LOG(INFO) << "WaitForAllComputations callback";
         common::MutexLocker locker(&mutex_);
-        LOG(INFO) << "LOCKED WaitForAllComputations callback";
         constraints_.insert(constraints_.end(), result.begin(), result.end());
         notification = true;
       });
-  LOG(INFO) << "WaitForAllComputations waiting";
   locker.Await([&notification]() { return notification; });
-  LOG(INFO) << "DONE WaitForAllComputations";
 }
 
 void PoseGraph::FinishTrajectory(const int trajectory_id) {
