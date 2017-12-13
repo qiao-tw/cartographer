@@ -468,6 +468,14 @@ void PoseGraph::HandleWorkQueue() {
         for (auto& trimmer : trimmers_) {
           trimmer->Trim(&trimming_handle);
         }
+        trimmers_.erase(
+            std::remove_if(
+                trimmers_.begin(), trimmers_.end(),
+                [](std::unique_ptr<mapping::PoseGraphTrimmer>& trimmer) {
+                  return trimmer->IsFinished();
+                }),
+            trimmers_.end());
+        LOG(INFO) << "(4) WhenDone callback";
 
         num_nodes_since_last_loop_closure_ = 0;
         run_loop_closure_ = false;
@@ -554,6 +562,10 @@ void PoseGraph::FinishTrajectory(const int trajectory_id) {
       RunOptimization();
     }
   }
+}
+
+bool PoseGraph::IsTrajectoryFinished(const int trajectory_id) {
+  return finished_trajectories_.count(trajectory_id) > 0;
 }
 
 void PoseGraph::FreezeTrajectory(const int trajectory_id) {
@@ -750,6 +762,12 @@ sensor::MapByTime<sensor::OdometryData> PoseGraph::GetOdometryData() {
   return optimization_problem_.odometry_data();
 }
 
+sensor::MapByTime<sensor::FixedFramePoseData>
+PoseGraph::GetFixedFramePoseData() {
+  common::MutexLocker locker(&mutex_);
+  return optimization_problem_.fixed_frame_pose_data();
+}
+
 std::vector<PoseGraph::Constraint> PoseGraph::constraints() {
   common::MutexLocker locker(&mutex_);
   return constraints_;
@@ -858,6 +876,10 @@ PoseGraph::TrimmingHandle::TrimmingHandle(PoseGraph* const parent)
 int PoseGraph::TrimmingHandle::num_submaps(const int trajectory_id) const {
   const auto& submap_data = parent_->optimization_problem_.submap_data();
   return submap_data.SizeOfTrajectoryOrZero(trajectory_id);
+}
+
+bool PoseGraph::TrimmingHandle::IsFinished(const int trajectory_id) const {
+  return parent_->IsTrajectoryFinished(trajectory_id);
 }
 
 void PoseGraph::TrimmingHandle::MarkSubmapAsTrimmed(

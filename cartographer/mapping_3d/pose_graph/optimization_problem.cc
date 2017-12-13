@@ -172,7 +172,6 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
 
   // Set the starting point.
   CHECK(!submap_data_.empty());
-  CHECK(submap_data_.Contains(mapping::SubmapId{0, 0}));
   mapping::MapById<mapping::SubmapId, CeresPose> C_submaps;
   mapping::MapById<mapping::NodeId, CeresPose> C_nodes;
   bool first_submap = true;
@@ -476,6 +475,11 @@ const sensor::MapByTime<sensor::ImuData>& OptimizationProblem::imu_data()
 const sensor::MapByTime<sensor::OdometryData>&
 OptimizationProblem::odometry_data() const {
   return odometry_data_;
+}
+
+const sensor::MapByTime<sensor::FixedFramePoseData>&
+OptimizationProblem::fixed_frame_pose_data() const {
+  return fixed_frame_pose_data_;
 }
 
 transform::Rigid3d OptimizationProblem::ComputeRelativePose(

@@ -62,7 +62,9 @@ class Server {
                     cartographer::common::make_unique<RpcHandlerType>();
                 rpc_handler->SetRpc(rpc);
                 return rpc_handler;
-              }});
+              },
+              RpcType<typename RpcHandlerType::IncomingType,
+                      typename RpcHandlerType::OutgoingType>::value});
     }
 
    private:
@@ -73,8 +75,11 @@ class Server {
   };
   friend class Builder;
 
-  // Starts a server and waits for its termination.
-  void StartAndWait();
+  // Starts a server starts serving the registered services.
+  void Start();
+
+  // Shuts down the server and all of its services.
+  void Shutdown();
 
  private:
   Server(const Options& options);
@@ -84,6 +89,9 @@ class Server {
   void AddService(
       const std::string& service_name,
       const std::map<std::string, RpcHandlerInfo>& rpc_handler_infos);
+
+  static void RunCompletionQueue(
+      ::grpc::ServerCompletionQueue* completion_queue);
 
   Options options_;
 

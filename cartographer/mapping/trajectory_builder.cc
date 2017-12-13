@@ -33,6 +33,8 @@ proto::TrajectoryBuilderOptions CreateTrajectoryBuilderOptions(
           parameter_dictionary->GetDictionary("trajectory_builder_3d").get());
   options.set_pure_localization(
       parameter_dictionary->GetBool("pure_localization"));
+  options.set_itri_num_submaps_to_keep(
+      parameter_dictionary->GetInt("itri_num_submaps_to_keep"));
   return options;
 }
 

@@ -107,6 +107,13 @@ int MapBuilder::AddTrajectoryBuilder(
     pose_graph_->AddTrimmer(common::make_unique<PureLocalizationTrimmer>(
         trajectory_id, kSubmapsToKeep));
   }
+
+  if ( 0 < trajectory_options.itri_num_submaps_to_keep() ) {
+    int32 kSubmapsToKeep = trajectory_options.itri_num_submaps_to_keep();
+    pose_graph_->AddTrimmer(common::make_unique<ItriTrimmer>(
+        trajectory_id, kSubmapsToKeep));
+  }
+
   if (trajectory_options.has_initial_trajectory_pose()) {
     const auto& initial_trajectory_pose =
         trajectory_options.initial_trajectory_pose();
@@ -215,7 +222,22 @@ void MapBuilder::SerializeState(io::ProtoStreamWriter* const writer) {
       }
     }
   }
-  // TODO(whess): Serialize additional sensor data: fixed frame pose data.
+  // Next we serialize all fixed frame pose data from the pose graph.
+  {
+    const auto all_fixed_frame_pose_data = pose_graph_->GetFixedFramePoseData();
+    for (const int trajectory_id : all_fixed_frame_pose_data.trajectory_ids()) {
+      for (const auto& fixed_frame_pose_data :
+           all_fixed_frame_pose_data.trajectory(trajectory_id)) {
+        proto::SerializedData proto;
+        auto* const fixed_frame_pose_data_proto =
+            proto.mutable_fixed_frame_pose_data();
+        fixed_frame_pose_data_proto->set_trajectory_id(trajectory_id);
+        *fixed_frame_pose_data_proto->mutable_fixed_frame_pose_data() =
+            sensor::ToProto(fixed_frame_pose_data);
+        writer->WriteProto(proto);
+      }
+    }
+  }
 }
 
 void MapBuilder::LoadMap(io::ProtoStreamReader* const reader) {
@@ -273,8 +295,8 @@ void MapBuilder::LoadMap(io::ProtoStreamReader* const reader) {
                                    proto.submap().submap_id().submap_index()});
       pose_graph_->AddSubmapFromProto(submap_pose, proto.submap());
     }
-    // TODO(ojura): Deserialize IMU and odometry data when loading unfrozen
-    // trajectories.
+    // TODO(ojura): Deserialize IMU, odometry and fixed frame pose data when
+    // loading unfrozen trajectories.
   }
 
   // Add information about which nodes belong to which submap.

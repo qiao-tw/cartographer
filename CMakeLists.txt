@@ -72,6 +72,7 @@ if (NOT ${BUILD_GRPC})
   list(REMOVE_ITEM ALL_PROTOS ${ALL_GRPC_FILES})
 endif()
 
+# TODO(cschuet): Move proto compilation to separate function.
 set(ALL_PROTO_SRCS)
 set(ALL_PROTO_HDRS)
 foreach(ABS_FIL ${ALL_PROTOS})
@@ -110,9 +111,7 @@ if(${BUILD_GRPC})
     list(APPEND ALL_GRPC_SERVICE_HDRS "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.grpc.pb.h")
 
     add_custom_command(
-      OUTPUT "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.pb.cc"
-             "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.pb.h"
-             "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.grpc.pb.cc"
+      OUTPUT "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.grpc.pb.cc"
              "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.grpc.pb.h"
       COMMAND  ${PROTOBUF_PROTOC_EXECUTABLE}
       ARGS --grpc_out  ${PROJECT_BINARY_DIR}
