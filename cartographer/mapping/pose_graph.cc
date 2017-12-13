@@ -110,6 +110,8 @@ proto::PoseGraphOptions CreatePoseGraphOptions(
   options.set_global_constraint_search_after_n_seconds(
       parameter_dictionary->GetDouble(
           "global_constraint_search_after_n_seconds"));
+  options.set_defer_loop_closure_detection(
+      parameter_dictionary->GetBool("defer_loop_closure_detection"));
   PopulateOverlappingSubmapsTrimmerOptions2D(&options, parameter_dictionary);
   return options;
 }
