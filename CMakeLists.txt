@@ -135,15 +135,15 @@ configure_file(
   ${PROJECT_SOURCE_DIR}/cartographer/common/config.h.cmake
   ${PROJECT_BINARY_DIR}/cartographer/common/config.h)
 
-google_binary(cartographer_autogenerate_ground_truth
-  SRCS
-    cartographer/ground_truth/autogenerate_ground_truth_main.cc
-)
+#google_binary(cartographer_autogenerate_ground_truth
+#  SRCS
+#    cartographer/ground_truth/autogenerate_ground_truth_main.cc
+#)
 
-google_binary(cartographer_compute_relations_metrics
-  SRCS
-    cartographer/ground_truth/compute_relations_metrics_main.cc
-)
+#google_binary(cartographer_compute_relations_metrics
+#  SRCS
+#    cartographer/ground_truth/compute_relations_metrics_main.cc
+#)
 
 foreach(ABS_FIL ${ALL_TESTS})
   file(RELATIVE_PATH REL_FIL ${PROJECT_SOURCE_DIR} ${ABS_FIL})
@@ -151,7 +151,7 @@ foreach(ABS_FIL ${ALL_TESTS})
   get_filename_component(FIL_WE ${REL_FIL} NAME_WE)
   # Replace slashes as required for CMP0037.
   string(REPLACE "/" "." TEST_TARGET_NAME "${DIR}/${FIL_WE}")
-  google_test("${TEST_TARGET_NAME}" ${ABS_FIL})
+  # google_test("${TEST_TARGET_NAME}" ${ABS_FIL})
 endforeach()
 
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
