@@ -43,6 +43,10 @@ void ImuTracker::Advance(const common::Time time) {
           Eigen::Vector3d(imu_angular_velocity_ * delta_t));
   orientation_ = (orientation_ * rotation).normalized();
   gravity_vector_ = rotation.conjugate() * gravity_vector_;
+  // HACK: keep only yaw
+  orientation_ = Eigen::Quaterniond(
+        orientation_.w(), 0., 0., orientation_.z()).normalized();
+  gravity_vector_ = Eigen::Vector3d::UnitZ();
   time_ = time;
 }
 
@@ -63,6 +67,10 @@ void ImuTracker::AddImuLinearAccelerationObservation(
   const Eigen::Quaterniond rotation = Eigen::Quaterniond::FromTwoVectors(
       gravity_vector_, orientation_.conjugate() * Eigen::Vector3d::UnitZ());
   orientation_ = (orientation_ * rotation).normalized();
+  // HACK: keep only yaw
+  orientation_ = Eigen::Quaterniond(
+        orientation_.w(), 0., 0., orientation_.z()).normalized();
+  gravity_vector_ = Eigen::Vector3d::UnitZ();
   CHECK_GT((orientation_ * gravity_vector_).z(), 0.);
   CHECK_GT((orientation_ * gravity_vector_).normalized().z(), 0.99);
 }
