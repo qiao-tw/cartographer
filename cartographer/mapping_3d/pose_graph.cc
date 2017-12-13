@@ -454,32 +454,25 @@ void PoseGraph::UpdateTrajectoryConnectivity(const Constraint& constraint) {
 void PoseGraph::HandleWorkQueue() {
   constraint_builder_.WhenDone(
       [this](const pose_graph::ConstraintBuilder::Result& result) {
-        LOG(INFO) << "WhenDone callback invoked";
         {
           common::MutexLocker locker(&mutex_);
           constraints_.insert(constraints_.end(), result.begin(), result.end());
         }
-        LOG(INFO) << "LOCKED(1) WhenDone callback";
         RunOptimization();
 
         common::MutexLocker locker(&mutex_);
-        LOG(INFO) << "LOCKED(2) WhenDone callback";
         for (const Constraint& constraint : result) {
           UpdateTrajectoryConnectivity(constraint);
         }
-        LOG(INFO) << "(3) WhenDone callback";
         TrimmingHandle trimming_handle(this);
         for (auto& trimmer : trimmers_) {
           trimmer->Trim(&trimming_handle);
         }
-        LOG(INFO) << "(4) WhenDone callback";
 
         num_nodes_since_last_loop_closure_ = 0;
         run_loop_closure_ = false;
         while (!run_loop_closure_) {
-          LOG(INFO) << "(5) WhenDone callback";
           if (work_queue_->empty()) {
-            LOG(INFO) << "(6) WhenDone callback";
             work_queue_.reset();
             return;
           }
@@ -494,16 +487,11 @@ void PoseGraph::HandleWorkQueue() {
 
 void PoseGraph::WaitForAllComputations() {
   bool notification = false;
-  LOG(INFO) << "Waiting for all computations...";
   common::MutexLocker locker(&mutex_);
-  LOG(INFO) << "LOCKED Waiting for all computations...";
   const int num_finished_nodes_at_start =
       constraint_builder_.GetNumFinishedNodes();
   while (!locker.AwaitWithTimeout(
       [this]() REQUIRES(mutex_) {
-        LOG(INFO) << "NumFinishedNodes = "
-           << constraint_builder_.GetNumFinishedNodes()
-           << "; num_trajectory_nodes_ = " << num_trajectory_nodes_;
         return constraint_builder_.GetNumFinishedNodes() ==
                num_trajectory_nodes_;
       },
@@ -521,15 +509,11 @@ void PoseGraph::WaitForAllComputations() {
   constraint_builder_.WhenDone(
       [this,
        &notification](const pose_graph::ConstraintBuilder::Result& result) {
-        LOG(INFO) << "WaitForAllComputations callback";
         common::MutexLocker locker(&mutex_);
-        LOG(INFO) << "LOCKED WaitForAllComputations callback";
         constraints_.insert(constraints_.end(), result.begin(), result.end());
         notification = true;
       });
-  LOG(INFO) << "WaitForAllComputations waiting";
   locker.Await([&notification]() { return notification; });
-  LOG(INFO) << "DONE WaitForAllComputations";
 }
 
 void PoseGraph::FinishTrajectory(const int trajectory_id) {
