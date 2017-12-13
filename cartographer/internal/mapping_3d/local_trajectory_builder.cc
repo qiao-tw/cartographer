@@ -165,7 +165,7 @@ LocalTrajectoryBuilder::AddAccumulatedRangeData(
        {&low_resolution_point_cloud_in_tracking,
         &matching_submap->low_resolution_hybrid_grid()}},
       &pose_observation_in_submap, &summary);
-  // HACK: allow only yaw rotation
+  // HACK: allow only yaw rotation (in submap frame)
   /*
   const transform::Rigid3d::Quaternion rot = pose_observation_in_submap.rotation();
   pose_observation_in_submap = transform::Rigid3d(
