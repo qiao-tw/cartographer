@@ -505,40 +505,38 @@ void PoseGraph::WaitForAllComputations() {
 void PoseGraph::FinishTrajectory(const int trajectory_id) {
   // TODO(jihoonl): Add a logic to notify trimmers to finish the given
   // trajectory.
-  if (options_.defer_loop_closure_detection()) {
-    trajectory_finish_states_[trajectory_id] = true;
-    bool all_trajectories_finished = true;
-    if (loop_closure_work_queue_.count(trajectory_id) != 0) {
-      common::MutexLocker locker(&mutex_);
+  trajectory_finish_states_[trajectory_id] = true;
+  bool all_trajectories_finished = true;
+  if (loop_closure_work_queue_.count(trajectory_id) != 0) {
+    common::MutexLocker locker(&mutex_);
 
-      for (const auto& submap_id_data : submap_data_) {
-        // Set all submaps for this trajectory to finished
-        if (submap_id_data.id.trajectory_id == trajectory_id) {
-          submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
-        }
+    for (const auto& submap_id_data : submap_data_) {
+      // Set all submaps for this trajectory to finished
+      if (submap_id_data.id.trajectory_id == trajectory_id) {
+        submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
       }
+    }
 
-      if (work_queue_ == nullptr) {
-        work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
-      }
-      for (auto workItem : *loop_closure_work_queue_[trajectory_id]) {
-        work_queue_->push_back(workItem);
-      }
-      loop_closure_work_queue_.erase(trajectory_id);
+    if (work_queue_ == nullptr) {
+      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
     }
-    {
-      common::MutexLocker locker(&mutex_);
-      for (const auto& finished : trajectory_finish_states_) {
-        all_trajectories_finished &= finished.second;
-      }
+    for (auto workItem : *loop_closure_work_queue_[trajectory_id]) {
+      work_queue_->push_back(workItem);
     }
-    HandleWorkQueue();
-    if (all_trajectories_finished) {
-      // Should only call WaitForAllComputations() on the last trajectory,
-      // or it's going to deadlock!
-      WaitForAllComputations();
-      RunOptimization();
+    loop_closure_work_queue_.erase(trajectory_id);
+  }
+  {
+    common::MutexLocker locker(&mutex_);
+    for (const auto& finished : trajectory_finish_states_) {
+      all_trajectories_finished &= finished.second;
     }
+  }
+  HandleWorkQueue();
+  if (all_trajectories_finished) {
+    // Should only call WaitForAllComputations() on the last trajectory,
+    // or it's going to deadlock!
+    WaitForAllComputations();
+    RunOptimization();
   }
 }
 
