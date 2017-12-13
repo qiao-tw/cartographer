@@ -81,4 +81,5 @@ POSE_GRAPH = {
   global_sampling_ratio = 0.003,
   log_residual_histograms = true,
   global_constraint_search_after_n_seconds = 10.,
+  defer_loop_closure_detection = false,
 }
