@@ -297,7 +297,7 @@ void PoseGraph3D::ComputeConstraint(const NodeId& node_id,
     const common::Time last_connection_time =
         data_.trajectory_connectivity_state.LastConnectionTime(
             node_id.trajectory_id, submap_id.trajectory_id);
-    if (node_id.trajectory_id == submap_id.trajectory_id ||
+    if (true || node_id.trajectory_id == submap_id.trajectory_id ||
         node_time <
             last_connection_time +
                 common::FromSeconds(
