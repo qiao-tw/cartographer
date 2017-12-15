@@ -174,7 +174,7 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
   CHECK(!submap_data_.empty());
   mapping::MapById<mapping::SubmapId, CeresPose> C_submaps;
   mapping::MapById<mapping::NodeId, CeresPose> C_nodes;
-  bool first_submap = true;
+  bool first_submap = false;
   for (const auto& submap_id_data : submap_data_) {
     const bool frozen =
         frozen_trajectories.count(submap_id_data.id.trajectory_id) != 0;
@@ -378,13 +378,11 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
     TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
     problem.AddParameterBlock(trajectory_data.gps_rotation.data(), 4,
                               new ceres::QuaternionParameterization());
+    problem.SetParameterBlockConstant(
+        trajectory_data.gps_rotation.data());
 
     const auto& gps_pose_data =
         trajectory_data.gps_rotation;
-    transform::Rigid3d gps_pose(
-          {0., 0., 0.},
-          {gps_pose_data[3], gps_pose_data[4], gps_pose_data[5], gps_pose_data[6]}
-          );
 
     for (int node_itx = 0; node_it != trajectory_end; ++node_it) {
       const mapping::NodeId node_id = node_it->id;
@@ -438,11 +436,6 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
                 << " deg (" << imu_calibration[0] << ", " << imu_calibration[1]
                 << ", " << imu_calibration[2] << ", " << imu_calibration[3]
                 << ")";
-      const auto& gps_pose =
-          trajectory_data_[trajectory_id].gps_rotation;
-      LOG(INFO) << "GPS rotation: (" << std::setprecision(15)
-                << gps_pose[0] << ", " << gps_pose[1] << ", "
-                << gps_pose[2] << ", " << gps_pose[3] << ")";
     }
   }
 
