@@ -520,8 +520,6 @@ void OptimizationProblem3D::Solve(
     problem.AddParameterBlock(trajectory_data.gps_rotation.data(), 4, new ceres::QuaternionParameterization());
     problem.SetParameterBlockConstant(trajectory_data.gps_rotation.data());
 
-    const auto& gps_pose_data = trajectory_data.gps_rotation;
-
     for (int node_itx = 0; node_it != trajectory_end; ++node_it) {
       const NodeId node_id = node_it->id;
       const NodeSpec3D& node_data = node_it->data;
