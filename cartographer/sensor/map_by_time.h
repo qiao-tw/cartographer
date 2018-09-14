@@ -40,7 +40,9 @@ class MapByTime {
     CHECK_GE(trajectory_id, 0);
     auto& trajectory = data_[trajectory_id];
     if (!trajectory.empty()) {
-      CHECK_GT(data.time, std::prev(trajectory.end())->first);
+      if (data.time <= std::prev(trajectory.end())->first) {
+          return;
+      }
     }
     trajectory.emplace(data.time, data);
   }
