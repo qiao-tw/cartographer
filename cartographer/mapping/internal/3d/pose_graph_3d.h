@@ -172,7 +172,7 @@ class PoseGraph3D : public PoseGraph {
   // Handles a new loop closure work item for a trajectory.
   void AddLoopClosureWorkItemForTrajectory(
       const int trajectory_id,
-      const std::function<void()>& work_item) REQUIRES(mutex_);
+      const std::function<void()>& work_item) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   
   // Adds connectivity and sampler for a trajectory if it does not exist.
   void AddTrajectoryIfNeeded(int trajectory_id)
@@ -199,14 +199,14 @@ class PoseGraph3D : public PoseGraph {
       bool newly_finished_submap) LOCKS_EXCLUDED(mutex_);
 
   // Trigger optimization for a node without starting scan matching.
-  const std::vector<mapping::SubmapId> ComputeEarlyOptimizationForNode(
-      const mapping::NodeId& node_id,
-      std::vector<std::shared_ptr<const Submap>> insertion_submaps,
-      bool newly_finished_submap) REQUIRES(mutex_);
+  WorkItem::Result ComputeEarlyOptimizationForNode(
+      const NodeId& node_id,
+      std::vector<std::shared_ptr<const Submap3D>> insertion_submaps,
+      bool newly_finished_submap) LOCKS_EXCLUDED(mutex_);
   
   // Trigger scan matching for a node.
   void FindLoopClosureConstraintsForNode(
-      const mapping::NodeId& node_id) REQUIRES(mutex_);
+      const mapping::NodeId& node_id) LOCKS_EXCLUDED(mutex_);
   
   // Computes constraints for a node and submap pair.
   void ComputeConstraint(const NodeId& node_id, const SubmapId& submap_id)
