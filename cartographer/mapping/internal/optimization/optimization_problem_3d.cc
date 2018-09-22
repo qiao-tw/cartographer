@@ -514,7 +514,7 @@ void OptimizationProblem3D::Solve(
       continue;
     }
 
-    const TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
+    TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
 
     // bool fixed_frame_pose_initialized = false;
     problem.AddParameterBlock(trajectory_data.gps_rotation.data(), 4, new ceres::QuaternionParameterization());
@@ -574,12 +574,11 @@ void OptimizationProblem3D::Solve(
           C_nodes.at(node_id).rotation(), C_nodes.at(node_id).translation());
 #endif
       problem.AddResidualBlock(
-            new ceres::AutoDiffCostFunction<GpsCostFunction, 3, 4, 3, 4>(
-              new GpsCostFunction(constraint_pose)),
-            nullptr,
-            C_nodes.at(node_id).rotation(),
-            C_nodes.at(node_id).translation(),
-            trajectory_data.gps_rotation.data());
+          GpsCostFunction::CreateAutoDiffCostFunction(constraint_pose),
+          nullptr /* loss function */,
+          C_nodes.at(node_id).rotation(),
+          C_nodes.at(node_id).translation(),
+          trajectory_data.gps_rotation.data());
     }
   }
   // Solve.

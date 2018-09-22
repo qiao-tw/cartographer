@@ -58,7 +58,7 @@ void ItriTrimmer::Trim(Trimmable* const pose_graph)
 {
   while ( pose_graph->num_submaps(trajectory_id_) > num_submaps_to_keep_ ) {
     const int submap_index_to_trim_next = num_submaps_trimmed_;
-    pose_graph->MarkSubmapAsTrimmed(
+    pose_graph->TrimSubmap(
         SubmapId{trajectory_id_, submap_index_to_trim_next});
     ++num_submaps_trimmed_;
   }

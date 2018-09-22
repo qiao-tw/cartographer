@@ -57,7 +57,7 @@ message PoseGraphOptions {
   double global_constraint_search_after_n_seconds = 10;
 
   // Whether to defer loop closure detection until FinishTrajectory().
-  bool defer_loop_closure_detection = 11;
+  bool defer_loop_closure_detection = 12;
 
   message OverlappingSubmapsTrimmerOptions2D {
     int32 fresh_submaps_count = 1;

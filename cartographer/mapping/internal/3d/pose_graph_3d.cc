@@ -147,16 +147,15 @@ NodeId PoseGraph3D::AddNode(
       insertion_submaps.front()->insertion_finished();
   if (options_.defer_loop_closure_detection()) {
     AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
-      auto submap_ids = ComputeEarlyOptimizationForNode(
+      AddLoopClosureWorkItemForTrajectory(
+            trajectory_id,
+            [=]() LOCKS_EXCLUDED(mutex_) {
+        FindLoopClosureConstraintsForNode(node_id);
+      });
+      return ComputeEarlyOptimizationForNode(
             node_id,
             insertion_submaps,
             newly_finished_submap);
-      AddLoopClosureWorkItemForTrajectory(
-            trajectory_id,
-            [=]() REQUIRES(mutex_) {
-        FindLoopClosureConstraintsForNode(node_id);
-      });
-      return WorkItem::Result::kDoNotRunOptimization; // not sure if here should run optimization
     });    
   } else {
     AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
@@ -184,13 +183,13 @@ void PoseGraph3D::AddWorkItem(
           .count());
 }
 
-void PoseGraph::AddLoopClosureWorkItemForTrajectory(
+void PoseGraph3D::AddLoopClosureWorkItemForTrajectory(
     const int trajectory_id,
     const std::function<void()>& work_item) {
   if (loop_closure_work_queue_.count(trajectory_id) == 0) {
     loop_closure_work_queue_.emplace(
           trajectory_id,
-          common::make_unique<std::deque<std::function<void()>>>());
+          absl::make_unique<std::deque<std::function<void()>>>());
   }
   loop_closure_work_queue_[trajectory_id]->push_back(work_item);
 }
@@ -213,7 +212,7 @@ void PoseGraph3D::AddTrajectoryIfNeeded(const int trajectory_id) {
   if (loop_closure_work_queue_.count(trajectory_id) == 0) {
     loop_closure_work_queue_.emplace(
           trajectory_id,
-          common::make_unique<std::deque<std::function<void()>>>());
+          absl::make_unique<std::deque<std::function<void()>>>());
   }
   if (trajectory_finish_states_.count(trajectory_id) == 0) {
     trajectory_finish_states_.emplace(trajectory_id, false);
@@ -413,95 +412,87 @@ WorkItem::Result PoseGraph3D::ComputeConstraintsForNode(
   return WorkItem::Result::kDoNotRunOptimization;
 }
 
-const std::vector<mapping::SubmapId> PoseGraph3D::ComputeEarlyOptimizationForNode(
-    const mapping::NodeId& node_id,
-    std::vector<std::shared_ptr<const Submap>> insertion_submaps,
+WorkItem::Result PoseGraph3D::ComputeEarlyOptimizationForNode(
+    const NodeId& node_id,
+    std::vector<std::shared_ptr<const Submap3D>> insertion_submaps,
     const bool newly_finished_submap) {
-  const auto& constant_data = trajectory_nodes_.at(node_id).constant_data;
-  const std::vector<mapping::SubmapId> submap_ids = InitializeGlobalSubmapPoses(
-      node_id.trajectory_id, constant_data->time, insertion_submaps);
-  CHECK_EQ(submap_ids.size(), insertion_submaps.size());
-  const mapping::SubmapId matching_id = submap_ids.front();
-  const transform::Rigid3d& local_pose = constant_data->local_pose;
-  const transform::Rigid3d global_pose =
-      optimization_problem_.submap_data().at(matching_id).global_pose *
-      insertion_submaps.front()->local_pose().inverse() * local_pose;
-  optimization_problem_.AddTrajectoryNode(
-      matching_id.trajectory_id, constant_data->time, local_pose, global_pose);
-  for (size_t i = 0; i < insertion_submaps.size(); ++i) {
-    const mapping::SubmapId submap_id = submap_ids[i];
-    // Even if this was the last node added to 'submap_id', the submap will only
-    // be marked as finished in 'submap_data_' further below.
-    CHECK(submap_data_.at(submap_id).state == SubmapState::kActive);
-    submap_data_.at(submap_id).node_ids.emplace(node_id);
-    const transform::Rigid3d constraint_transform =
-        insertion_submaps[i]->local_pose().inverse() * local_pose;
-    constraints_.push_back(
-        Constraint{submap_id,
-                   node_id,
-                   {constraint_transform, options_.matcher_translation_weight(),
-                    options_.matcher_rotation_weight()},
-                   Constraint::INTRA_SUBMAP});
+  std::vector<SubmapId> submap_ids;
+  std::vector<SubmapId> finished_submap_ids;
+  std::set<NodeId> newly_finished_submap_node_ids;
+  {
+    absl::MutexLock locker(&mutex_);
+    const auto& constant_data =
+        data_.trajectory_nodes.at(node_id).constant_data;
+    submap_ids = InitializeGlobalSubmapPoses(
+        node_id.trajectory_id, constant_data->time, insertion_submaps);
+    CHECK_EQ(submap_ids.size(), insertion_submaps.size());
+    const SubmapId matching_id = submap_ids.front();
+    const transform::Rigid3d& local_pose = constant_data->local_pose;
+    const transform::Rigid3d global_pose =
+        optimization_problem_->submap_data().at(matching_id).global_pose *
+        insertion_submaps.front()->local_pose().inverse() * local_pose;
+    optimization_problem_->AddTrajectoryNode(
+        matching_id.trajectory_id,
+        optimization::NodeSpec3D{constant_data->time, local_pose, global_pose});
+    for (size_t i = 0; i < insertion_submaps.size(); ++i) {
+      const SubmapId submap_id = submap_ids[i];
+      // Even if this was the last node added to 'submap_id', the submap will
+      // only be marked as finished in 'data_.submap_data' further below.
+      CHECK(data_.submap_data.at(submap_id).state ==
+            SubmapState::kNoConstraintSearch);
+      data_.submap_data.at(submap_id).node_ids.emplace(node_id);
+      const transform::Rigid3d constraint_transform =
+          insertion_submaps[i]->local_pose().inverse() * local_pose;
+      data_.constraints.push_back(Constraint{
+          submap_id,
+          node_id,
+          {constraint_transform, options_.matcher_translation_weight(),
+           options_.matcher_rotation_weight()},
+          Constraint::INTRA_SUBMAP});
+    }
+    if (newly_finished_submap) {
+      const SubmapId newly_finished_submap_id = submap_ids.front();
+      InternalSubmapData& finished_submap_data =
+          data_.submap_data.at(newly_finished_submap_id);
+      CHECK(finished_submap_data.state == SubmapState::kNoConstraintSearch);
+      finished_submap_data.state = SubmapState::kFinished;
+      newly_finished_submap_node_ids = finished_submap_data.node_ids;
+    }
   }
-   if (newly_finished_submap) {
-    const mapping::SubmapId finished_submap_id = submap_ids.front();
-    SubmapData& finished_submap_data = submap_data_.at(finished_submap_id);
-    CHECK(finished_submap_data.state == SubmapState::kActive);
-    finished_submap_data.state = SubmapState::kFinished;
+
+  for (const auto& submap_id : finished_submap_ids) {
+    ComputeConstraint(node_id, submap_id);
   }
-   // constraint_builder_.NotifyEndOfNode();
+
+  //constraint_builder_.NotifyEndOfNode();
   ++num_nodes_since_last_loop_closure_;
   if (options_.optimize_every_n_nodes() > 0 &&
       num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
-    CHECK(!run_loop_closure_);
-    run_loop_closure_ = true;
-    // If there is a 'work_queue_' already, some other thread will take care.
-    if (work_queue_ == nullptr) {
-      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
-      HandleWorkQueue();
-    }
+    return WorkItem::Result::kRunOptimization;
   }
-   return submap_ids;
+  return WorkItem::Result::kDoNotRunOptimization;
 }
- void PoseGraph::FindLoopClosureConstraintsForNode(
+
+void PoseGraph3D::FindLoopClosureConstraintsForNode(
     const mapping::NodeId& node_id) {
-  for (const auto& submap_id_data : submap_data_) {
-    // FIXME: breaks multiple trajectories!
-    /*
-    if (submap_id_data.data.node_ids.count(node_id) != 0) { // Node on submap
-      if (submap_id_data.data.state != SubmapState::kFinished) {
-        // Set submap to finished, assuming FindLoopClosureConstraintsForNode
-        // is only called at FinishTrajectory()
-        submap_data_.at(submap_id_data.id).state = SubmapState::kFinished;
-        LOG(INFO) << "ComputeConstraintsForOldNodes(" << submap_id_data.id
-                  << ")";
-        ComputeConstraintsForOldNodes(submap_id_data.id);
-      }
-    }
-    */
+  for (const auto& submap_id_data : data_.submap_data) {
     if (submap_id_data.data.node_ids.count(node_id) == 0 &&
         submap_id_data.data.state == SubmapState::kFinished) {
       // Node is not on this submap
-      LOG(INFO) << "ComputeConstraint(" << node_id << ", " << submap_id_data.id
-                << ")";
+      LOG(INFO) << "ComputeConstraint(" << node_id << ", " << submap_id_data.id << ")";
       ComputeConstraint(node_id, submap_id_data.id);
     }
-    //}
-    //else {
-    //  LOG(INFO) << "submap " << submap_id_data.id << " is not finished!";
-    //}
   }
-   constraint_builder_.NotifyEndOfNode();
+  constraint_builder_.NotifyEndOfNode();
   ++num_nodes_since_last_loop_closure_;
   if (options_.optimize_every_n_nodes() > 0 &&
       num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
-    CHECK(!run_loop_closure_);
-    run_loop_closure_ = true;
-    // If there is a 'work_queue_' already, some other thread will take care.
     if (work_queue_ == nullptr) {
-      work_queue_ = common::make_unique<std::deque<std::function<void()>>>();
-      HandleWorkQueue();
-    }
+        work_queue_ = absl::make_unique<WorkQueue>();
+        auto task = absl::make_unique<common::Task>();
+        task->SetWorkItem([this]() { DrainWorkQueue(); });
+        thread_pool_->Schedule(std::move(task));
+      }  
   }
 }
 

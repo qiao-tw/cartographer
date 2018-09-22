@@ -156,7 +156,7 @@ int MapBuilder::AddTrajectoryBuilder(
 
   if ( 0 < trajectory_options.itri_num_submaps_to_keep() ) {
     int32 kSubmapsToKeep = trajectory_options.itri_num_submaps_to_keep();
-    pose_graph_->AddTrimmer(common::make_unique<ItriTrimmer>(
+    pose_graph_->AddTrimmer(absl::make_unique<ItriTrimmer>(
         trajectory_id, kSubmapsToKeep));
   }
 
@@ -218,22 +218,24 @@ void MapBuilder::SerializeState(bool include_unfinished_submaps,
   io::WritePbStream(*pose_graph_, all_trajectory_builder_options_, writer,
                     include_unfinished_submaps);
   static std::ofstream ofile("/home/gpal/workspace/Cartographer/catkin_ws/poses.txt");
-  ofile << node_id_data.id << " "
-            << node_id_data.data.time() << " "
-            << node_id_data.data.global_pose.translation()(0) << " "
-            << node_id_data.data.global_pose.translation()(1) << " "
-            << node_id_data.data.global_pose.translation()(2) << " "
-            << node_id_data.data.global_pose.rotation().w() << " "
-            << node_id_data.data.global_pose.rotation().x() << " "
-            << node_id_data.data.global_pose.rotation().y() << " "
-            << node_id_data.data.global_pose.rotation().z() << " "
-            << node_id_data.data.constant_data->local_pose.translation()(0) << " "
-            << node_id_data.data.constant_data->local_pose.translation()(1) << " "
-            << node_id_data.data.constant_data->local_pose.translation()(2) << " "
-            << node_id_data.data.constant_data->local_pose.rotation().w() << " "
-            << node_id_data.data.constant_data->local_pose.rotation().x() << " "
-            << node_id_data.data.constant_data->local_pose.rotation().y() << " "
-            << node_id_data.data.constant_data->local_pose.rotation().z() << std::endl;
+  for (const auto& node_id_data : pose_graph_->GetTrajectoryNodes()) {
+    ofile << node_id_data.id << " "
+          << node_id_data.data.time() << " "
+          << node_id_data.data.global_pose.translation()(0) << " "
+          << node_id_data.data.global_pose.translation()(1) << " "
+          << node_id_data.data.global_pose.translation()(2) << " "
+          << node_id_data.data.global_pose.rotation().w() << " "
+          << node_id_data.data.global_pose.rotation().x() << " "
+          << node_id_data.data.global_pose.rotation().y() << " "
+          << node_id_data.data.global_pose.rotation().z() << " "
+          << node_id_data.data.constant_data->local_pose.translation()(0) << " "
+          << node_id_data.data.constant_data->local_pose.translation()(1) << " "
+          << node_id_data.data.constant_data->local_pose.translation()(2) << " "
+          << node_id_data.data.constant_data->local_pose.rotation().w() << " "
+          << node_id_data.data.constant_data->local_pose.rotation().x() << " "
+          << node_id_data.data.constant_data->local_pose.rotation().y() << " "
+          << node_id_data.data.constant_data->local_pose.rotation().z() << std::endl;
+  }
   ofile.flush();
   ofile.close();
 }
