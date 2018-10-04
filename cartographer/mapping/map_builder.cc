@@ -153,12 +153,13 @@ int MapBuilder::AddTrajectoryBuilder(
   MaybeAddPureLocalizationTrimmer(trajectory_id, trajectory_options,
                                   pose_graph_.get());
 
-
+#if 1 // let's remove prev work and see what will happen...
   if ( 0 < trajectory_options.itri_num_submaps_to_keep() ) {
     int32 kSubmapsToKeep = trajectory_options.itri_num_submaps_to_keep();
     pose_graph_->AddTrimmer(absl::make_unique<ItriTrimmer>(
         trajectory_id, kSubmapsToKeep));
   }
+#endif
 
   if (trajectory_options.has_initial_trajectory_pose()) {
     const auto& initial_trajectory_pose =

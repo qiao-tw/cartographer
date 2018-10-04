@@ -41,6 +41,7 @@ class MapByTime {
     auto& trajectory = data_[trajectory_id];
     if (!trajectory.empty()) {
       if (data.time <= std::prev(trajectory.end())->first) {
+          LOG(ERROR) << __func__ << ": data.time <= std::prev(trajectory.end())->first";
           return;
       }
     }

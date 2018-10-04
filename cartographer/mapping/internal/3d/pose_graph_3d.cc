@@ -145,6 +145,7 @@ NodeId PoseGraph3D::AddNode(
   // execute the lambda.
   const bool newly_finished_submap =
       insertion_submaps.front()->insertion_finished();
+#if 1 // Let's roll back to upstream and see what will happen...
   if (options_.defer_loop_closure_detection()) {
     AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
       AddLoopClosureWorkItemForTrajectory(
@@ -163,6 +164,12 @@ NodeId PoseGraph3D::AddNode(
                                        newly_finished_submap);
     });
   }
+#else
+  AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
+    return ComputeConstraintsForNode(node_id, insertion_submaps,
+                                     newly_finished_submap);
+  });
+#endif
   return node_id;
 }
 
@@ -209,6 +216,7 @@ void PoseGraph3D::AddTrajectoryIfNeeded(const int trajectory_id) {
         absl::make_unique<common::FixedRatioSampler>(
             options_.global_sampling_ratio());
   }
+#if 1 // let's roll back to upstream and see what will happen
   if (loop_closure_work_queue_.count(trajectory_id) == 0) {
     loop_closure_work_queue_.emplace(
           trajectory_id,
@@ -217,6 +225,7 @@ void PoseGraph3D::AddTrajectoryIfNeeded(const int trajectory_id) {
   if (trajectory_finish_states_.count(trajectory_id) == 0) {
     trajectory_finish_states_.emplace(trajectory_id, false);
   }
+#endif
 }
 
 void PoseGraph3D::AddImuData(const int trajectory_id,
@@ -296,7 +305,7 @@ void PoseGraph3D::ComputeConstraint(const NodeId& node_id,
     const common::Time last_connection_time =
         data_.trajectory_connectivity_state.LastConnectionTime(
             node_id.trajectory_id, submap_id.trajectory_id);
-    if (true || node_id.trajectory_id == submap_id.trajectory_id ||
+    if (node_id.trajectory_id == submap_id.trajectory_id ||
         node_time <
             last_connection_time +
                 common::FromSeconds(
@@ -327,6 +336,7 @@ void PoseGraph3D::ComputeConstraint(const NodeId& node_id,
     constraint_builder_.MaybeAddGlobalConstraint(
         submap_id, submap, node_id, constant_data, global_node_pose.rotation(),
         global_submap_pose.rotation());
+    LOG(INFO) << __func__ << ": add a global constraint regarding submap_id(" << submap_id << ")";
   }
 }
 
@@ -851,6 +861,7 @@ void PoseGraph3D::AddSerializedConstraints(
                     .second);
           break;
         case Constraint::Tag::INTER_SUBMAP:
+          LOG(INFO) << "An inter-submap constraint is added";
           UpdateTrajectoryConnectivity(constraint);
           break;
       }

@@ -81,8 +81,26 @@ void ConstraintBuilder3D::MaybeAddConstraint(
     const transform::Rigid3d& global_submap_pose) {
   if ((global_node_pose.translation() - global_submap_pose.translation())
           .norm() > options_.max_constraint_distance()) {
+#if 0 // debug only
+    LOG(INFO) << __func__
+              << ": Distance(global_node_pose, global_submap_pose) = "
+              << (global_node_pose.translation() - global_submap_pose.translation()).norm()
+              << " > max_constraint_distance("
+              << options_.max_constraint_distance()
+              << "), no constraint added";
+#endif // debug only
     return;
   }
+#if 0 // debug only
+  else {
+    LOG(INFO) << __func__
+              << ": Distance(global_node_pose, global_submap_pose) = "
+              << (global_node_pose.translation() - global_submap_pose.translation()).norm()
+              << " < max_constraint_distance("
+              << options_.max_constraint_distance()
+              << "), adding new constraint...";
+  }
+#endif // debug only
   if (!sampler_.Pulse()) return;
 
   absl::MutexLock locker(&mutex_);
@@ -241,6 +259,7 @@ void ConstraintBuilder3D::ComputeConstraint(
       kConstraintLowResolutionScoresMetric->Observe(
           match_result->low_resolution_score);
     } else {
+      //LOG(WARNING) << __func__ << ": match_result(nullptr)"; // debug only
       return;
     }
   }
@@ -263,7 +282,7 @@ void ConstraintBuilder3D::ComputeConstraint(
                              {&constant_data->low_resolution_point_cloud,
                               submap_scan_matcher.low_resolution_hybrid_grid}},
                             &constraint_transform, &unused_summary);
-
+  LOG(WARNING) << __func__ << ": resetting constraint to INTER_SUBMAP";
   constraint->reset(new Constraint{
       submap_id,
       node_id,

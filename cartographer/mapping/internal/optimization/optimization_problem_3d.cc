@@ -292,8 +292,8 @@ void OptimizationProblem3D::Solve(
   MapById<SubmapId, CeresPose> C_submaps;
   MapById<NodeId, CeresPose> C_nodes;
   std::map<std::string, CeresPose> C_landmarks;
-  // bool first_submap = true;
-  bool first_submap = false;
+  bool first_submap = true;
+  // bool first_submap = false;
   bool freeze_landmarks = !frozen_trajectories.empty();
   for (const auto& submap_id_data : submap_data_) {
     const bool frozen =
@@ -352,6 +352,12 @@ void OptimizationProblem3D::Solve(
         C_submaps.at(constraint.submap_id).translation(),
         C_nodes.at(constraint.node_id).rotation(),
         C_nodes.at(constraint.node_id).translation());
+    // debug only
+    LOG_IF(INFO, constraint.tag == Constraint::INTER_SUBMAP)
+        << "an inter-submap constraint is added: "
+        << "node_id: " << constraint.node_id
+        << ", submap_id: " << constraint.submap_id
+        << "pose_s_n: " << constraint.pose.zbar_ij.DebugString();
   }
   // Add cost functions for landmarks.
   AddLandmarkCostFunctions(landmark_nodes, freeze_landmarks, node_data_,

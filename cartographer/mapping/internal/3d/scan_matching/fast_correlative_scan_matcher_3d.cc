@@ -188,12 +188,22 @@ FastCorrelativeScanMatcher3D::MatchWithSearchParameters(
       search_parameters, discrete_scans, lowest_resolution_candidates,
       precomputation_grid_stack_->max_depth(), min_score);
   if (best_candidate.score > min_score) {
+    LOG(INFO) << __func__
+              << ": best_candidate.score(" << best_candidate.score << ") > min_score("
+              << min_score << ")";
     return absl::make_unique<Result>(Result{
         best_candidate.score,
         GetPoseFromCandidate(discrete_scans, best_candidate).cast<double>(),
         discrete_scans[best_candidate.scan_index].rotational_score,
         best_candidate.low_resolution_score});
   }
+#if 0 // debug only
+  else {
+    LOG(WARNING) << __func__
+              << ": best_candidate.score(" << best_candidate.score << ") < min_score("
+              << min_score << "), return nullptr";
+  }
+#endif // debug only
   return nullptr;
 }
 
@@ -264,6 +274,13 @@ std::vector<DiscreteScan3D> FastCorrelativeScanMatcher3D::GenerateDiscreteScans(
                                           (2.f * common::Pow2(max_scan_range)));
   const int angular_window_size = common::RoundToInt(
       search_parameters.angular_search_window / angular_step_size);
+
+#if 0  // debug only
+  LOG(INFO) << __func__
+            << ": angular_step_size(" << angular_step_size
+            << "), angular_window_size(" << angular_window_size
+            << ")";
+#endif
   std::vector<float> angles;
   for (int rz = -angular_window_size; rz <= angular_window_size; ++rz) {
     angles.push_back(rz * angular_step_size);
@@ -291,6 +308,7 @@ std::vector<DiscreteScan3D> FastCorrelativeScanMatcher3D::GenerateDiscreteScans(
     result.push_back(
         DiscretizeScan(search_parameters, point_cloud, pose, scores[i]));
   }
+  // LOG(INFO) << __func__ << ": return (" << result.size() << ") results"; // debug only
   return result;
 }
 
@@ -326,6 +344,7 @@ FastCorrelativeScanMatcher3D::GenerateLowestResolutionCandidates(
     }
   }
   CHECK_EQ(candidates.size(), num_candidates);
+  // LOG(INFO) << __func__ << ": num_candidates(" << num_candidates << ")";
   return candidates;
 }
 
@@ -349,6 +368,7 @@ void FastCorrelativeScanMatcher3D::ScoreCandidates(
     candidate.score = PrecomputationGrid3D::ToProbability(
         sum /
         static_cast<float>(discrete_scan.cell_indices_per_depth[depth].size()));
+    // LOG(INFO) << __func__ << ": candidate.score(" << candidate.score << ")"; // debug only
   }
   std::sort(candidates->begin(), candidates->end(),
             std::greater<Candidate3D>());
@@ -363,6 +383,7 @@ FastCorrelativeScanMatcher3D::ComputeLowestResolutionCandidates(
                                          discrete_scans.size());
   ScoreCandidates(precomputation_grid_stack_->max_depth(), discrete_scans,
                   &lowest_resolution_candidates);
+  // LOG(INFO) << __func__ << ": lowest_resolution_candidates.size(" << lowest_resolution_candidates.size() << ")";
   return lowest_resolution_candidates;
 }
 
@@ -436,6 +457,7 @@ Candidate3D FastCorrelativeScanMatcher3D::BranchAndBound(
                        higher_resolution_candidates, candidate_depth - 1,
                        best_high_resolution_candidate.score));
   }
+  //LOG(INFO) << __func__ << ": best_high_resolution_candidate.score(" << best_high_resolution_candidate.score << ")"; // debug only
   return best_high_resolution_candidate;
 }
 
