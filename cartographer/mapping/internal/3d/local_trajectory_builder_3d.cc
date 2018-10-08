@@ -20,6 +20,7 @@
 
 #include "absl/memory/memory.h"
 #include "cartographer/common/time.h"
+#include "cartographer/common/utils.h"
 #include "cartographer/mapping/internal/3d/scan_matching/rotational_scan_matcher.h"
 #include "cartographer/mapping/proto/3d/local_trajectory_builder_options_3d.pb.h"
 #include "cartographer/mapping/proto/3d/submaps_options_3d.pb.h"
@@ -64,7 +65,9 @@ std::unique_ptr<transform::Rigid3d> LocalTrajectoryBuilder3D::ScanMatch(
     const transform::Rigid3d& pose_prediction,
     const sensor::PointCloud& low_resolution_point_cloud_in_tracking,
     const sensor::PointCloud& high_resolution_point_cloud_in_tracking) {
+  //FUNC_STAT_BEGIN
   if (active_submaps_.submaps().empty()) {
+    //FUNC_STAT_END
     return absl::make_unique<transform::Rigid3d>(pose_prediction);
   }
   std::shared_ptr<const mapping::Submap3D> matching_submap =
@@ -99,6 +102,7 @@ std::unique_ptr<transform::Rigid3d> LocalTrajectoryBuilder3D::ScanMatch(
       pose_observation_in_submap.rotation().angularDistance(
           initial_ceres_pose.rotation());
   kScanMatcherResidualAngleMetric->Observe(residual_angle);
+  //FUNC_STAT_END
   return absl::make_unique<transform::Rigid3d>(matching_submap->local_pose() *
                                                pose_observation_in_submap);
 }
@@ -121,10 +125,12 @@ std::unique_ptr<LocalTrajectoryBuilder3D::MatchingResult>
 LocalTrajectoryBuilder3D::AddRangeData(
     const std::string& sensor_id,
     const sensor::TimedPointCloudData& unsynchronized_data) {
+  //FUNC_STAT_BEGIN
   const auto synchronized_data =
       range_data_collator_.AddRangeData(sensor_id, unsynchronized_data);
   if (synchronized_data.ranges.empty()) {
     LOG(INFO) << "Range data collator filling buffer.";
+    //FUNC_STAT_END
     return nullptr;
   }
 
@@ -133,6 +139,7 @@ LocalTrajectoryBuilder3D::AddRangeData(
     // Until we've initialized the extrapolator with our first IMU message, we
     // cannot compute the orientation of the rangefinder.
     LOG(INFO) << "IMU not yet initialized.";
+    //FUNC_STAT_END
     return nullptr;
   }
 
@@ -143,6 +150,7 @@ LocalTrajectoryBuilder3D::AddRangeData(
       common::FromSeconds(synchronized_data.ranges.front().point_time.time);
   if (time_first_point < extrapolator_->GetLastPoseTime()) {
     LOG(INFO) << "Extrapolator is still initializing.";
+    //FUNC_STAT_END
     return nullptr;
   }
 
@@ -225,11 +233,13 @@ LocalTrajectoryBuilder3D::AddRangeData(
       kLocalSlamVoxelFilterFraction->Set(voxel_filter_fraction);
     }
 
+    //FUNC_STAT_END
     return AddAccumulatedRangeData(
         current_sensor_time,
         sensor::TransformRangeData(filtered_range_data, current_pose.inverse()),
         sensor_duration);
   }
+  //FUNC_STAT_END
   return nullptr;
 }
 
@@ -238,8 +248,10 @@ LocalTrajectoryBuilder3D::AddAccumulatedRangeData(
     const common::Time time,
     const sensor::RangeData& filtered_range_data_in_tracking,
     const absl::optional<common::Duration>& sensor_duration) {
+  //FUNC_STAT_BEGIN
   if (filtered_range_data_in_tracking.returns.empty()) {
     LOG(WARNING) << "Dropped empty range data.";
+    //FUNC_STAT_END
     return nullptr;
   }
   const transform::Rigid3d pose_prediction =
@@ -253,6 +265,7 @@ LocalTrajectoryBuilder3D::AddAccumulatedRangeData(
       adaptive_voxel_filter.Filter(filtered_range_data_in_tracking.returns);
   if (high_resolution_point_cloud_in_tracking.empty()) {
     LOG(WARNING) << "Dropped empty high resolution point cloud data.";
+    //FUNC_STAT_END
     return nullptr;
   }
   sensor::AdaptiveVoxelFilter low_resolution_adaptive_voxel_filter(
@@ -262,6 +275,7 @@ LocalTrajectoryBuilder3D::AddAccumulatedRangeData(
           filtered_range_data_in_tracking.returns);
   if (low_resolution_point_cloud_in_tracking.empty()) {
     LOG(WARNING) << "Dropped empty low resolution point cloud data.";
+    //FUNC_STAT_END
     return nullptr;
   }
 
@@ -270,6 +284,7 @@ LocalTrajectoryBuilder3D::AddAccumulatedRangeData(
                 high_resolution_point_cloud_in_tracking);
   if (pose_estimate == nullptr) {
     LOG(WARNING) << "Scan matching failed.";
+    //FUNC_STAT_END
     return nullptr;
   }
   extrapolator_->AddPose(time, *pose_estimate);
@@ -325,6 +340,7 @@ LocalTrajectoryBuilder3D::AddAccumulatedRangeData(
   }
   last_wall_time_ = wall_time;
   last_thread_cpu_time_seconds_ = thread_cpu_time_seconds;
+  //FUNC_STAT_END
   return absl::make_unique<MatchingResult>(MatchingResult{
       time, *pose_estimate, std::move(filtered_range_data_in_local),
       std::move(insertion_result)});

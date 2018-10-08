@@ -29,6 +29,7 @@
 #include "absl/memory/memory.h"
 #include "cartographer/common/math.h"
 #include "cartographer/common/thread_pool.h"
+#include "cartographer/common/utils.h"
 #include "cartographer/mapping/proto/scan_matching//ceres_scan_matcher_options_3d.pb.h"
 #include "cartographer/mapping/proto/scan_matching//fast_correlative_scan_matcher_options_3d.pb.h"
 #include "cartographer/metrics/counter.h"
@@ -196,6 +197,7 @@ void ConstraintBuilder3D::ComputeConstraint(
     const transform::Rigid3d& global_submap_pose,
     const SubmapScanMatcher& submap_scan_matcher,
     std::unique_ptr<Constraint>* constraint) {
+  //FUNC_STAT_BEGIN
   CHECK(submap_scan_matcher.fast_correlative_scan_matcher);
   // The 'constraint_transform' (submap i <- node j) is computed from:
   // - a 'high_resolution_point_cloud' in node j and
@@ -224,6 +226,7 @@ void ConstraintBuilder3D::ComputeConstraint(
       kGlobalConstraintLowResolutionScoresMetric->Observe(
           match_result->low_resolution_score);
     } else {
+      //FUNC_STAT_END
       return;
     }
   } else {
@@ -241,6 +244,7 @@ void ConstraintBuilder3D::ComputeConstraint(
       kConstraintLowResolutionScoresMetric->Observe(
           match_result->low_resolution_score);
     } else {
+      //FUNC_STAT_END
       return;
     }
   }
@@ -271,6 +275,8 @@ void ConstraintBuilder3D::ComputeConstraint(
        options_.loop_closure_rotation_weight()},
       Constraint::INTER_SUBMAP});
 
+  LOG(WARNING) << "add INTER_SUBMAP Constraint: node(" << node_id << "), submap(" << submap_id << "), tf=" << constraint_transform.DebugString();
+
   if (options_.log_matches()) {
     std::ostringstream info;
     info << "Node " << node_id << " with "
@@ -292,6 +298,7 @@ void ConstraintBuilder3D::ComputeConstraint(
          << "%.";
     LOG(INFO) << info.str();
   }
+  //FUNC_STAT_END
 }
 
 void ConstraintBuilder3D::RunWhenDoneCallback() {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cartographer/common/utils.h"
 #include "cartographer/mapping/3d/range_data_inserter_3d.h"
 
 #include "Eigen/Core"
@@ -29,6 +30,7 @@ void InsertMissesIntoGrid(const std::vector<uint16>& miss_table,
                           const sensor::PointCloud& returns,
                           HybridGrid* hybrid_grid,
                           const int num_free_space_voxels) {
+  //FUNC_STAT_BEGIN
   const Eigen::Array3i origin_cell = hybrid_grid->GetCellIndex(origin);
   for (const sensor::RangefinderPoint& hit : returns) {
     const Eigen::Array3i hit_cell = hybrid_grid->GetCellIndex(hit.position);
@@ -49,6 +51,7 @@ void InsertMissesIntoGrid(const std::vector<uint16>& miss_table,
       hybrid_grid->ApplyLookupTable(miss_cell, miss_table);
     }
   }
+  //FUNC_STAT_END
 }
 
 }  // namespace
@@ -77,6 +80,7 @@ RangeDataInserter3D::RangeDataInserter3D(
 
 void RangeDataInserter3D::Insert(const sensor::RangeData& range_data,
                                  HybridGrid* hybrid_grid) const {
+  //FUNC_STAT_BEGIN
   CHECK_NOTNULL(hybrid_grid);
 
   for (const sensor::RangefinderPoint& hit : range_data.returns) {
@@ -89,6 +93,7 @@ void RangeDataInserter3D::Insert(const sensor::RangeData& range_data,
   InsertMissesIntoGrid(miss_table_, range_data.origin, range_data.returns,
                        hybrid_grid, options_.num_free_space_voxels());
   hybrid_grid->FinishUpdate();
+  //FUNC_STAT_END
 }
 
 }  // namespace mapping
