@@ -20,6 +20,7 @@
 #include <limits>
 
 #include "cartographer/common/math.h"
+#include "cartographer/common/utils.h"
 #include "cartographer/mapping/internal/3d/scan_matching/rotational_scan_matcher.h"
 #include "cartographer/sensor/range_data.h"
 #include "glog/logging.h"
@@ -273,6 +274,7 @@ void Submap3D::InsertData(const sensor::RangeData& range_data_in_local,
                           const float high_resolution_max_range,
                           const Eigen::Quaterniond& local_from_gravity_aligned,
                           const Eigen::VectorXf& scan_histogram_in_gravity) {
+  //FUNC_STAT_BEGIN
   CHECK(!insertion_finished());
   // Transform range data into submap frame.
   const sensor::RangeData transformed_range_data = sensor::TransformRangeData(

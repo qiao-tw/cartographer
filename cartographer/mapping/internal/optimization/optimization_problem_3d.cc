@@ -30,6 +30,7 @@
 #include "cartographer/common/ceres_solver_options.h"
 #include "cartographer/common/math.h"
 #include "cartographer/common/time.h"
+#include "cartographer/common/utils.h"
 #include "cartographer/mapping/internal/3d/imu_integration.h"
 #include "cartographer/mapping/internal/3d/rotation_parameterization.h"
 #include "cartographer/mapping/internal/optimization/ceres_pose.h"
@@ -262,8 +263,10 @@ void OptimizationProblem3D::Solve(
     const std::map<int, PoseGraphInterface::TrajectoryState>&
         trajectories_state,
     const std::map<std::string, LandmarkNode>& landmark_nodes) {
+  //FUNC_STAT_BEGIN
   if (node_data_.empty()) {
     // Nothing to optimize.
+    //FUNC_STAT_END
     return;
   }
 
@@ -599,6 +602,7 @@ void OptimizationProblem3D::Solve(
   for (const auto& C_landmark : C_landmarks) {
     landmark_data_[C_landmark.first] = C_landmark.second.ToRigid();
   }
+  //FUNC_STAT_END
 }
 
 std::unique_ptr<transform::Rigid3d>
