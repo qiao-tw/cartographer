@@ -174,7 +174,7 @@ TEST_F(FastCorrelativeScanMatcher3DTest, CorrectPoseForMatchFullSubmap) {
 
   const std::unique_ptr<FastCorrelativeScanMatcher3D::Result> result =
       fast_correlative_scan_matcher->MatchFullSubmap(
-          Eigen::Quaterniond::Identity(), Eigen::Quaterniond::Identity(),
+          transform::Rigid3d(), transform::Rigid3d(),
           CreateConstantData(point_cloud_), kMinScore);
   EXPECT_THAT(result, testing::NotNull());
   EXPECT_LT(kMinScore, result->score);
@@ -187,7 +187,7 @@ TEST_F(FastCorrelativeScanMatcher3DTest, CorrectPoseForMatchFullSubmap) {
 
   const std::unique_ptr<FastCorrelativeScanMatcher3D::Result>
       low_resolution_result = fast_correlative_scan_matcher->MatchFullSubmap(
-          Eigen::Quaterniond::Identity(), Eigen::Quaterniond::Identity(),
+          transform::Rigid3d(), transform::Rigid3d(),
           CreateConstantData({{Eigen::Vector3f(42.f, 42.f, 42.f)}}), kMinScore);
   EXPECT_THAT(low_resolution_result, testing::IsNull())
       << low_resolution_result->low_resolution_score;

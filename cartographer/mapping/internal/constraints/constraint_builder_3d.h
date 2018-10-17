@@ -85,16 +85,16 @@ class ConstraintBuilder3D {
   // 'submap_id' and the 'compressed_point_cloud' for 'node_id'.
   // This performs full-submap matching.
   //
-  // 'global_node_rotation' and 'global_submap_rotation' are initial estimates
-  // of roll and pitch, i.e. their yaw is essentially ignored.
+  // 'global_node_pose' and 'global_submap_pose' are initial estimates
+  // of pose, note. their yaw is essentially ignored.
   //
   // The pointees of 'submap' and 'compressed_point_cloud' must stay valid until
   // all computations are finished.
   void MaybeAddGlobalConstraint(
       const SubmapId& submap_id, const Submap3D* submap, const NodeId& node_id,
       const TrajectoryNode::Data* const constant_data,
-      const Eigen::Quaterniond& global_node_rotation,
-      const Eigen::Quaterniond& global_submap_rotation);
+      const transform::Rigid3d& global_node_pose,
+      const transform::Rigid3d& global_submap_pose);
 
   // Must be called after all computations related to one node have been added.
   void NotifyEndOfNode();
