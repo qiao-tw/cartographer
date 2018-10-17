@@ -48,11 +48,6 @@
 namespace cartographer {
 namespace mapping {
 namespace optimization {
-namespace {
-
-using LandmarkNode = ::cartographer::mapping::PoseGraphInterface::LandmarkNode;
-using TrajectoryData =
-    ::cartographer::mapping::PoseGraphInterface::TrajectoryData;
 
 // For odometry.
 std::unique_ptr<transform::Rigid3d> Interpolate(
@@ -101,6 +96,12 @@ std::unique_ptr<transform::Rigid3d> Interpolate(
   }
   return nullptr;
 }
+
+namespace {
+
+using LandmarkNode = ::cartographer::mapping::PoseGraphInterface::LandmarkNode;
+using TrajectoryData =
+    ::cartographer::mapping::PoseGraphInterface::TrajectoryData;
 
 // Selects a trajectory node closest in time to the landmark observation and
 // applies a relative transform from it.
@@ -263,10 +264,10 @@ void OptimizationProblem3D::Solve(
     const std::map<int, PoseGraphInterface::TrajectoryState>&
         trajectories_state,
     const std::map<std::string, LandmarkNode>& landmark_nodes) {
-  //FUNC_STAT_BEGIN
+  // FUNC_STAT_BEGIN
   if (node_data_.empty()) {
     // Nothing to optimize.
-    //FUNC_STAT_END
+    // FUNC_STAT_END
     return;
   }
 
@@ -602,7 +603,7 @@ void OptimizationProblem3D::Solve(
   for (const auto& C_landmark : C_landmarks) {
     landmark_data_[C_landmark.first] = C_landmark.second.ToRigid();
   }
-  //FUNC_STAT_END
+  // FUNC_STAT_END
 }
 
 std::unique_ptr<transform::Rigid3d>

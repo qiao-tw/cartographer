@@ -96,6 +96,21 @@ class ConstraintBuilder3D {
       const Eigen::Quaterniond& global_node_rotation,
       const Eigen::Quaterniond& global_submap_rotation);
 
+  // Schedules exploring a new constraint between 'submap' identified by
+  // 'submap_id' and the 'compressed_point_cloud' for 'node_id'.
+  // This performs full-submap matching.
+  //
+  // 'global_node_pose' and 'global_submap_pose' are initial estimates of poses
+  // in the global map frame, i.e. both are gravity aligned.
+  //
+  // The pointees of 'submap' and 'compressed_point_cloud' must stay valid until
+  // all computations are finished.
+  void MaybeAddGlobalConstraint(const SubmapId& submap_id,
+                                const Submap3D* submap, const NodeId& node_id,
+                                const TrajectoryNode::Data* const constant_data,
+                                const transform::Rigid3d& global_node_pose,
+                                const transform::Rigid3d& global_submap_pose);
+
   // Must be called after all computations related to one node have been added.
   void NotifyEndOfNode();
 
@@ -136,7 +151,9 @@ class ConstraintBuilder3D {
                          const transform::Rigid3d& global_node_pose,
                          const transform::Rigid3d& global_submap_pose,
                          const SubmapScanMatcher& submap_scan_matcher,
-                         std::unique_ptr<Constraint>* constraint)
+                         std::unique_ptr<Constraint>* constraint,
+                         bool apply_search_window_full_submap = false,
+                         double max_constraint_distance = 0.0)
       LOCKS_EXCLUDED(mutex_);
 
   void RunWhenDoneCallback() LOCKS_EXCLUDED(mutex_);

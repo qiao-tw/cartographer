@@ -132,6 +132,14 @@ class OptimizationProblem3D
   std::map<int, PoseGraphInterface::TrajectoryData> trajectory_data_;
 };
 
+std::unique_ptr<transform::Rigid3d> Interpolate(
+    const sensor::MapByTime<sensor::FixedFramePoseData>& map_by_time,
+    const int trajectory_id, const common::Time time);
+
+std::unique_ptr<transform::Rigid3d> Interpolate(
+    const sensor::MapByTime<sensor::OdometryData>& map_by_time,
+    const int trajectory_id, const common::Time time);
+
 }  // namespace optimization
 }  // namespace mapping
 }  // namespace cartographer

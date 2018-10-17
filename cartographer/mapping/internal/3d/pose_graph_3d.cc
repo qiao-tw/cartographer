@@ -292,9 +292,19 @@ void PoseGraph3D::ComputeConstraint(const NodeId& node_id,
                                            constant_data, global_node_pose,
                                            global_submap_pose);
   } else if (maybe_add_global_constraint) {
-    constraint_builder_.MaybeAddGlobalConstraint(
-        submap_id, submap, node_id, constant_data, global_node_pose.rotation(),
-        global_submap_pose.rotation());
+    AddWorkItem([=]() LOCKS_EXCLUDED(mutex_) {
+      absl::MutexLock locker(&mutex_);
+      std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
+          optimization::Interpolate(
+              optimization_problem_->fixed_frame_pose_data(),
+              node_id.trajectory_id, data_.trajectory_nodes.at(node_id).time());
+      if (fixed_frame_pose != nullptr) {
+        constraint_builder_.MaybeAddGlobalConstraint(
+            submap_id, submap, node_id, constant_data, *fixed_frame_pose,
+            global_submap_pose);
+      }
+      return WorkItem::Result::kDoNotRunOptimization;
+    });
   }
 }
 
@@ -302,7 +312,7 @@ WorkItem::Result PoseGraph3D::ComputeConstraintsForNode(
     const NodeId& node_id,
     std::vector<std::shared_ptr<const Submap3D>> insertion_submaps,
     const bool newly_finished_submap) {
-  //FUNC_STAT_BEGIN
+  // FUNC_STAT_BEGIN
   std::vector<SubmapId> submap_ids;
   std::vector<SubmapId> finished_submap_ids;
   std::set<NodeId> newly_finished_submap_node_ids;
@@ -377,10 +387,10 @@ WorkItem::Result PoseGraph3D::ComputeConstraintsForNode(
   ++num_nodes_since_last_loop_closure_;
   if (options_.optimize_every_n_nodes() > 0 &&
       num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
-    //FUNC_STAT_END
+    // FUNC_STAT_END
     return WorkItem::Result::kRunOptimization;
   }
-  //FUNC_STAT_END
+  // FUNC_STAT_END
   return WorkItem::Result::kDoNotRunOptimization;
 }
 

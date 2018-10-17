@@ -146,6 +146,26 @@ FastCorrelativeScanMatcher3D::Match(
 
 std::unique_ptr<FastCorrelativeScanMatcher3D::Result>
 FastCorrelativeScanMatcher3D::MatchFullSubmap(
+    const transform::Rigid3d& global_node_pose,
+    const transform::Rigid3d& global_submap_pose,
+    const TrajectoryNode::Data& constant_data, const float min_score,
+    double max_constraint_distance) const {
+  const auto low_resolution_matcher = scan_matching::CreateLowResolutionMatcher(
+      low_resolution_hybrid_grid_, &constant_data.low_resolution_point_cloud);
+  const SearchParameters search_parameters{
+      common::RoundToInt(max_constraint_distance / resolution_),
+      common::RoundToInt(max_constraint_distance / resolution_),
+      options_.angular_search_window(), &low_resolution_matcher};
+  return MatchWithSearchParameters(
+      search_parameters, global_node_pose.cast<float>(),
+      global_submap_pose.cast<float>(),
+      constant_data.high_resolution_point_cloud,
+      constant_data.rotational_scan_matcher_histogram,
+      constant_data.gravity_alignment, min_score);
+}
+
+std::unique_ptr<FastCorrelativeScanMatcher3D::Result>
+FastCorrelativeScanMatcher3D::MatchFullSubmap(
     const Eigen::Quaterniond& global_node_rotation,
     const Eigen::Quaterniond& global_submap_rotation,
     const TrajectoryNode::Data& constant_data, const float min_score) const {
@@ -178,7 +198,7 @@ FastCorrelativeScanMatcher3D::MatchWithSearchParameters(
     const sensor::PointCloud& point_cloud,
     const Eigen::VectorXf& rotational_scan_matcher_histogram,
     const Eigen::Quaterniond& gravity_alignment, const float min_score) const {
-  //FUNC_STAT_BEGIN
+  // FUNC_STAT_BEGIN
   const std::vector<DiscreteScan3D> discrete_scans = GenerateDiscreteScans(
       search_parameters, point_cloud, rotational_scan_matcher_histogram,
       gravity_alignment, global_node_pose, global_submap_pose);
@@ -190,14 +210,14 @@ FastCorrelativeScanMatcher3D::MatchWithSearchParameters(
       search_parameters, discrete_scans, lowest_resolution_candidates,
       precomputation_grid_stack_->max_depth(), min_score);
   if (best_candidate.score > min_score) {
-    //FUNC_STAT_END
+    // FUNC_STAT_END
     return absl::make_unique<Result>(Result{
         best_candidate.score,
         GetPoseFromCandidate(discrete_scans, best_candidate).cast<double>(),
         discrete_scans[best_candidate.scan_index].rotational_score,
         best_candidate.low_resolution_score});
   }
-  //FUNC_STAT_END
+  // FUNC_STAT_END
   return nullptr;
 }
 
@@ -336,7 +356,7 @@ FastCorrelativeScanMatcher3D::GenerateLowestResolutionCandidates(
 void FastCorrelativeScanMatcher3D::ScoreCandidates(
     const int depth, const std::vector<DiscreteScan3D>& discrete_scans,
     std::vector<Candidate3D>* const candidates) const {
-  //FUNC_STAT_BEGIN
+  // FUNC_STAT_BEGIN
   const int reduction_exponent =
       std::max(0, depth - options_.full_resolution_depth() + 1);
   for (Candidate3D& candidate : *candidates) {
@@ -357,20 +377,20 @@ void FastCorrelativeScanMatcher3D::ScoreCandidates(
   }
   std::sort(candidates->begin(), candidates->end(),
             std::greater<Candidate3D>());
-  //FUNC_STAT_END
+  // FUNC_STAT_END
 }
 
 std::vector<Candidate3D>
 FastCorrelativeScanMatcher3D::ComputeLowestResolutionCandidates(
     const FastCorrelativeScanMatcher3D::SearchParameters& search_parameters,
     const std::vector<DiscreteScan3D>& discrete_scans) const {
-  //FUNC_STAT_BEGIN
+  // FUNC_STAT_BEGIN
   std::vector<Candidate3D> lowest_resolution_candidates =
       GenerateLowestResolutionCandidates(search_parameters,
                                          discrete_scans.size());
   ScoreCandidates(precomputation_grid_stack_->max_depth(), discrete_scans,
                   &lowest_resolution_candidates);
-  //FUNC_STAT_END
+  // FUNC_STAT_END
   return lowest_resolution_candidates;
 }
 
@@ -387,13 +407,13 @@ Candidate3D FastCorrelativeScanMatcher3D::BranchAndBound(
     const std::vector<DiscreteScan3D>& discrete_scans,
     const std::vector<Candidate3D>& candidates, const int candidate_depth,
     float min_score) const {
-  //FUNC_STAT_BEGIN
+  // FUNC_STAT_BEGIN
   if (candidate_depth == 0) {
     for (const Candidate3D& candidate : candidates) {
       if (candidate.score <= min_score) {
         // Return if the candidate is bad because the following candidate will
         // not have better score.
-        //FUNC_STAT_END
+        // FUNC_STAT_END
         return Candidate3D::Unsuccessful();
       }
       const float low_resolution_score =
@@ -403,13 +423,13 @@ Candidate3D FastCorrelativeScanMatcher3D::BranchAndBound(
         // We found the best candidate that passes the matching function.
         Candidate3D best_candidate = candidate;
         best_candidate.low_resolution_score = low_resolution_score;
-        //FUNC_STAT_END
+        // FUNC_STAT_END
         return best_candidate;
       }
     }
 
     // All candidates have good scores but none passes the matching function.
-    //FUNC_STAT_END
+    // FUNC_STAT_END
     return Candidate3D::Unsuccessful();
   }
 
@@ -448,7 +468,7 @@ Candidate3D FastCorrelativeScanMatcher3D::BranchAndBound(
                        higher_resolution_candidates, candidate_depth - 1,
                        best_high_resolution_candidate.score));
   }
-  //FUNC_STAT_END
+  // FUNC_STAT_END
   return best_high_resolution_candidate;
 }
 
