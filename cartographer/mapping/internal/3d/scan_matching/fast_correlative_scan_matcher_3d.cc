@@ -145,8 +145,8 @@ FastCorrelativeScanMatcher3D::Match(
 
 std::unique_ptr<FastCorrelativeScanMatcher3D::Result>
 FastCorrelativeScanMatcher3D::MatchFullSubmap(
-    const Eigen::Quaterniond& global_node_rotation,
-    const Eigen::Quaterniond& global_submap_rotation,
+    const transform::Rigid3d& global_node_pose,
+    const transform::Rigid3d& global_submap_pose,
     const TrajectoryNode::Data& constant_data, const float min_score) const {
   float max_point_distance = 0.f;
   for (const sensor::RangefinderPoint& point :
@@ -159,11 +159,11 @@ FastCorrelativeScanMatcher3D::MatchFullSubmap(
   const auto low_resolution_matcher = scan_matching::CreateLowResolutionMatcher(
       low_resolution_hybrid_grid_, &constant_data.low_resolution_point_cloud);
   const SearchParameters search_parameters{
-      linear_window_size, linear_window_size, M_PI, &low_resolution_matcher};
+      linear_window_size, linear_window_size, options_.angular_search_window(), &low_resolution_matcher};
   return MatchWithSearchParameters(
       search_parameters,
-      transform::Rigid3f::Rotation(global_node_rotation.cast<float>()),
-      transform::Rigid3f::Rotation(global_submap_rotation.cast<float>()),
+      transform::Rigid3f::Rotation(global_node_pose.rotation().cast<float>()),
+      transform::Rigid3f::Rotation(global_submap_pose.rotation().cast<float>()),
       constant_data.high_resolution_point_cloud,
       constant_data.rotational_scan_matcher_histogram,
       constant_data.gravity_alignment, min_score);

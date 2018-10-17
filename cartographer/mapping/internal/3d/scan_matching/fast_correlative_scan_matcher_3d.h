@@ -92,12 +92,12 @@ class FastCorrelativeScanMatcher3D {
                                 float min_score) const;
 
   // Aligns the node with the given 'constant_data' within the 'hybrid_grid'
-  // given rotations which are expected to be approximately gravity aligned.
+  // given pose which are expected to be approximately gravity aligned.
   // 'Result' is only returned if a score above 'min_score' (excluding equality)
   // is possible.
   std::unique_ptr<Result> MatchFullSubmap(
-      const Eigen::Quaterniond& global_node_rotation,
-      const Eigen::Quaterniond& global_submap_rotation,
+      const transform::Rigid3d& global_node_pose,
+      const transform::Rigid3d& global_submap_pose,
       const TrajectoryNode::Data& constant_data, float min_score) const;
 
  private:
