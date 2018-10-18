@@ -35,6 +35,7 @@
 #include "cartographer/mapping/internal/3d/rotation_parameterization.h"
 #include "cartographer/mapping/internal/optimization/ceres_pose.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/acceleration_cost_function_3d.h"
+#include "cartographer/mapping/internal/optimization/cost_functions/gps_cost_function_3d.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/landmark_cost_function_3d.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/rotation_cost_function_3d.h"
 #include "cartographer/mapping/internal/optimization/cost_functions/spa_cost_function_3d.h"
@@ -294,6 +295,7 @@ void OptimizationProblem3D::Solve(
   MapById<SubmapId, CeresPose> C_submaps;
   MapById<NodeId, CeresPose> C_nodes;
   std::map<std::string, CeresPose> C_landmarks;
+  std::map<NodeId, std::vector<Constraint>> C_relatice_constraints;
   bool first_submap = true;
   bool freeze_landmarks = !frozen_trajectories.empty();
   for (const auto& submap_id_data : submap_data_) {
@@ -353,6 +355,7 @@ void OptimizationProblem3D::Solve(
         C_submaps.at(constraint.submap_id).translation(),
         C_nodes.at(constraint.node_id).rotation(),
         C_nodes.at(constraint.node_id).translation());
+    C_relatice_constraints[constraint.node_id].push_back(constraint);
   }
   // Add cost functions for landmarks.
   AddLandmarkCostFunctions(landmark_nodes, freeze_landmarks, node_data_,
@@ -507,7 +510,8 @@ void OptimizationProblem3D::Solve(
 
   // Add fixed frame pose constraints.
   std::map<int, CeresPose> C_fixed_frames;
-  for (auto node_it = node_data_.begin(); node_it != node_data_.end();) {
+  for (auto node_it = node_data_.begin(); node_it != node_data_.end();
+       ++node_it) {
     const int trajectory_id = node_it->id.trajectory_id;
     const auto trajectory_end = node_data_.EndOfTrajectory(trajectory_id);
     if (!fixed_frame_pose_data_.HasTrajectory(trajectory_id)) {
@@ -515,52 +519,24 @@ void OptimizationProblem3D::Solve(
       continue;
     }
 
-    const TrajectoryData& trajectory_data = trajectory_data_.at(trajectory_id);
-    bool fixed_frame_pose_initialized = false;
-    for (; node_it != trajectory_end; ++node_it) {
-      const NodeId node_id = node_it->id;
-      const NodeSpec3D& node_data = node_it->data;
+    const NodeId node_id = node_it->id;
+    const NodeSpec3D& node_data = node_it->data;
+    const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
+        Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);
+    if (fixed_frame_pose == nullptr) {
+      continue;
+    }
+    const Constraint::Pose constraint_pose{
+        *fixed_frame_pose, options_.fixed_frame_pose_translation_weight(),
+        options_.fixed_frame_pose_rotation_weight()};
 
-      const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
-          Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);
-      if (fixed_frame_pose == nullptr) {
-        continue;
-      }
-
-      const Constraint::Pose constraint_pose{
-          *fixed_frame_pose, options_.fixed_frame_pose_translation_weight(),
-          options_.fixed_frame_pose_rotation_weight()};
-
-      if (!fixed_frame_pose_initialized) {
-        transform::Rigid3d fixed_frame_pose_in_map;
-        if (trajectory_data.fixed_frame_origin_in_map.has_value()) {
-          fixed_frame_pose_in_map =
-              trajectory_data.fixed_frame_origin_in_map.value();
-        } else {
-          fixed_frame_pose_in_map =
-              node_data.global_pose * constraint_pose.zbar_ij.inverse();
-        }
-        C_fixed_frames.emplace(
-            std::piecewise_construct, std::forward_as_tuple(trajectory_id),
-            std::forward_as_tuple(
-                transform::Rigid3d(
-                    fixed_frame_pose_in_map.translation(),
-                    Eigen::AngleAxisd(
-                        transform::GetYaw(fixed_frame_pose_in_map.rotation()),
-                        Eigen::Vector3d::UnitZ())),
-                nullptr,
-                absl::make_unique<ceres::AutoDiffLocalParameterization<
-                    YawOnlyQuaternionPlus, 4, 1>>(),
-                &problem));
-        fixed_frame_pose_initialized = true;
-      }
-
+    for (const auto& relative_constraint : C_relatice_constraints.at(node_id)) {
       problem.AddResidualBlock(
-          SpaCostFunction3D::CreateAutoDiffCostFunction(constraint_pose),
+          GpsCostFunction3D::CreateAutoDiffCostFunction(
+              constraint_pose, relative_constraint.pose),
           nullptr /* loss function */,
-          C_fixed_frames.at(trajectory_id).rotation(),
-          C_fixed_frames.at(trajectory_id).translation(),
-          C_nodes.at(node_id).rotation(), C_nodes.at(node_id).translation());
+          C_submaps.at(relative_constraint.submap_id).rotation(),
+          C_submaps.at(relative_constraint.submap_id).translation());
     }
   }
   // Solve.
