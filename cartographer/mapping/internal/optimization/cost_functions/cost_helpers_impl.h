@@ -100,6 +100,35 @@ std::array<T, 6> ScaleError(const std::array<T, 6>& error,
   // clang-format on
 }
 
+template <typename T>
+static std::array<T, 3> ComputeFixedPosistionError(
+    const transform::Rigid3d::Vector& constraint_posistion,
+    const transform::Rigid3d::Vector& relative_position,
+    const T* const start_rotation, const T* const start_translation) {
+  const Eigen::Quaternion<T> R_i(start_rotation[0], start_rotation[1],
+                                 start_rotation[2], start_rotation[3]);
+  const Eigen::Matrix<T, 3, 1> reference_translation(
+      start_translation[0], start_translation[1], start_translation[2]);
+  const Eigen::Matrix<T, 3, 1> global_translation =
+      reference_translation + R_i * relative_position.cast<T>();
+
+  return {{T(constraint_posistion.x()) - global_translation[0],
+           T(constraint_posistion.y()) - global_translation[1],
+           T(constraint_posistion.z()) - global_translation[2]}};
+}
+
+template <typename T>
+std::array<T, 3> ScaleError(const std::array<T, 3>& error,
+                            double translation_weight) {
+  // clang-format off
+  return {{
+      error[0] * translation_weight,
+      error[1] * translation_weight,
+      error[2] * translation_weight
+  }};
+  // clang-format on
+}
+
 //  Eigen implementation of slerp is not compatible with Ceres on all supported
 //  platforms. Our own implementation is used instead.
 template <typename T>
