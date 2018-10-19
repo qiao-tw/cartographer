@@ -52,6 +52,28 @@ class PoseGraphInterface {
     enum Tag { INTRA_SUBMAP, INTER_SUBMAP } tag;
   };
 
+  // For GPS usage, we should have more weight parameters.
+  struct ConstraintFixedFrame {
+    struct PoseFixedFrame {
+      transform::Rigid3d zbar_ij;
+      double translation_xy_weight;
+      double translation_z_weight;
+      double rotation_yaw_weight;
+      double rotation_roll_pitch_weight;
+    };
+
+    SubmapId submap_id;  // 'i' in the paper.
+    NodeId node_id;      // 'j' in the paper.
+
+    // Pose of the node 'j' relative to submap 'i'.
+    PoseFixedFrame pose;
+
+    // Differentiates between intra-submap (where node 'j' was inserted into
+    // submap 'i') and inter-submap constraints (where node 'j' was not inserted
+    // into submap 'i').
+    enum Tag { INTRA_SUBMAP, INTER_SUBMAP } tag;
+  };
+
   struct LandmarkNode {
     struct LandmarkObservation {
       int trajectory_id;

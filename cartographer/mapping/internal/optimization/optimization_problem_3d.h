@@ -122,6 +122,9 @@ class OptimizationProblem3D
       int trajectory_id, const NodeSpec3D& first_node_data,
       const NodeSpec3D& second_node_data) const;
 
+  NodeId GetNearestNode(const sensor::FixedFramePoseData& fixed_frame_pose,
+                        NodeSpec3D& node_data);
+
   optimization::proto::OptimizationProblemOptions options_;
   MapById<NodeId, NodeSpec3D> node_data_;
   MapById<SubmapId, SubmapSpec3D> submap_data_;

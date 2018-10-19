@@ -77,7 +77,7 @@ void ConstraintBuilder2D::MaybeAddConstraint(
     const NodeId& node_id, const TrajectoryNode::Data* const constant_data,
     const transform::Rigid2d& initial_relative_pose) {
   if (initial_relative_pose.translation().norm() >
-      options_.max_constraint_distance()) {
+      options_.max_constraint_xy_distance()) {
     return;
   }
   if (!sampler_.Pulse()) return;

@@ -97,7 +97,6 @@ std::unique_ptr<transform::Rigid3d> Interpolate(
   }
   return nullptr;
 }
-
 namespace {
 
 using LandmarkNode = ::cartographer::mapping::PoseGraphInterface::LandmarkNode;
@@ -295,7 +294,6 @@ void OptimizationProblem3D::Solve(
   MapById<SubmapId, CeresPose> C_submaps;
   MapById<NodeId, CeresPose> C_nodes;
   std::map<std::string, CeresPose> C_landmarks;
-  std::map<NodeId, std::vector<Constraint>> C_relatice_constraints;
   bool first_submap = true;
   bool freeze_landmarks = !frozen_trajectories.empty();
   for (const auto& submap_id_data : submap_data_) {
@@ -355,7 +353,6 @@ void OptimizationProblem3D::Solve(
         C_submaps.at(constraint.submap_id).translation(),
         C_nodes.at(constraint.node_id).rotation(),
         C_nodes.at(constraint.node_id).translation());
-    C_relatice_constraints[constraint.node_id].push_back(constraint);
   }
   // Add cost functions for landmarks.
   AddLandmarkCostFunctions(landmark_nodes, freeze_landmarks, node_data_,
@@ -509,34 +506,30 @@ void OptimizationProblem3D::Solve(
   }
 
   // Add fixed frame pose constraints.
-  std::map<int, CeresPose> C_fixed_frames;
-  for (auto node_it = node_data_.begin(); node_it != node_data_.end();
-       ++node_it) {
-    const int trajectory_id = node_it->id.trajectory_id;
-    const auto trajectory_end = node_data_.EndOfTrajectory(trajectory_id);
-    if (!fixed_frame_pose_data_.HasTrajectory(trajectory_id)) {
-      node_it = trajectory_end;
-      continue;
-    }
+  for (const int trajectory_id : fixed_frame_pose_data_.trajectory_ids()) {
+    for (const auto& fixed_frame_pose_data :
+         fixed_frame_pose_data_.trajectory(trajectory_id)) {
+      NodeSpec3D node_data;
+      NodeId node_id = GetNearestNode(fixed_frame_pose_data, node_data);
+      if (node_id.trajectory_id < 0) {
+        continue;
+      }
 
-    const NodeId node_id = node_it->id;
-    const NodeSpec3D& node_data = node_it->data;
-    const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
-        Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);
-    if (fixed_frame_pose == nullptr) {
-      continue;
-    }
-    const Constraint::Pose constraint_pose{
-        *fixed_frame_pose, options_.fixed_frame_pose_translation_weight(),
-        options_.fixed_frame_pose_rotation_weight()};
+      const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
+          Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);
+      if (fixed_frame_pose == nullptr) {
+        continue;
+      }
+      const ConstraintFixedFrmae::PoseFixedFrame constraint_pose{
+          *fixed_frame_pose, options_.fixed_frame_pose_translation_xy_weight(),
+          options_.fixed_frame_pose_translation_z_weight(),
+          options_.fixed_frame_pose_rotation_yaw_weight(),
+          options_.fixed_frame_pose_rotation_roll_pitch_weight()};
 
-    for (const auto& relative_constraint : C_relatice_constraints.at(node_id)) {
       problem.AddResidualBlock(
-          GpsCostFunction3D::CreateAutoDiffCostFunction(
-              constraint_pose, relative_constraint.pose),
-          nullptr /* loss function */,
-          C_submaps.at(relative_constraint.submap_id).rotation(),
-          C_submaps.at(relative_constraint.submap_id).translation());
+          GpsCostFunction3D::CreateAutoDiffCostFunction(constraint_pose),
+          nullptr /* loss function */, C_nodes.at(node_id).rotation(),
+          C_nodes.at(node_id).translation());
     }
   }
   // Solve.
@@ -572,10 +565,6 @@ void OptimizationProblem3D::Solve(
     node_data_.at(C_node_id_data.id).global_pose =
         C_node_id_data.data.ToRigid();
   }
-  for (const auto& C_fixed_frame : C_fixed_frames) {
-    trajectory_data_.at(C_fixed_frame.first).fixed_frame_origin_in_map =
-        C_fixed_frame.second.ToRigid();
-  }
   for (const auto& C_landmark : C_landmarks) {
     landmark_data_[C_landmark.first] = C_landmark.second.ToRigid();
   }
@@ -598,6 +587,25 @@ OptimizationProblem3D::CalculateOdometryBetweenNodes(
     }
   }
   return nullptr;
+}
+
+// For fixed frame pose.
+NodeId OptimizationProblem3D::GetNearestNode(
+    const sensor::FixedFramePoseData& fixed_frame_pose, NodeSpec3D& node_data) {
+  double min_dt = -1.0;
+  NodeId node_id(-1, -1);
+  for (auto node_it = node_data_.begin(); node_it != node_data_.end();
+       ++node_it) {
+    common::Time node_time = node_it->data.time;
+    const double dt =
+        fabs(common::ToSeconds(node_time - fixed_frame_pose.time));
+    if (dt < min_dt || min_dt < 0.0) {
+      min_dt = dt;
+      node_data = node_it->data;
+      node_id = node_it->id;
+    }
+  }
+  return node_id;
 }
 
 }  // namespace optimization

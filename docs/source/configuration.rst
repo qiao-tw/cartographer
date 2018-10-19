@@ -40,7 +40,10 @@ double sampling_ratio
   A constraint will be added if the proportion of added constraints to
   potential constraints drops below this number.
 
-double max_constraint_distance
+double max_constraint_xy_distance
+  Threshold for poses to be considered near a submap.
+
+double max_constraint_z_distance
   Threshold for poses to be considered near a submap.
 
 double min_score
@@ -98,10 +101,10 @@ double odometry_translation_weight
 double odometry_rotation_weight
   Scaling parameter for rotation between consecutive nodes based on the odometry.
 
-double fixed_frame_pose_translation_weight
+double fixed_frame_pose_translation_xy_weight
   Scaling parameter for the FixedFramePose translation.
 
-double fixed_frame_pose_rotation_weight
+double fixed_frame_pose_rotation_yaw_weight
   Scaling parameter for the FixedFramePose rotation.
 
 bool log_solver_summary

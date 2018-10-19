@@ -46,10 +46,16 @@ message OptimizationProblemOptions {
   double odometry_rotation_weight = 17;
 
   // Scaling parameter for the FixedFramePose translation.
-  double fixed_frame_pose_translation_weight = 11;
+  double fixed_frame_pose_translation_xy_weight = 20;
+
+  // Scaling parameter for the FixedFramePose translation.
+  double fixed_frame_pose_translation_z_weight = 21;
 
   // Scaling parameter for the FixedFramePose rotation.
-  double fixed_frame_pose_rotation_weight = 12;
+  double fixed_frame_pose_rotation_yaw_weight = 22;
+
+  // Scaling parameter for the FixedFramePose rotation.
+  double fixed_frame_pose_rotation_roll_pitch_weight = 23;
 
   // 3D only: fix Z.
   bool fix_z_in_3d = 13;

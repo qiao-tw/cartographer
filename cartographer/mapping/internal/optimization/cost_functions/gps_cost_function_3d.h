@@ -20,33 +20,31 @@ namespace optimization {
 class GpsCostFunction3D {
  public:
   static ceres::CostFunction* CreateAutoDiffCostFunction(
-      const PoseGraph::Constraint::Pose& pose,
-      const PoseGraph::Constraint::Pose& relative_pose) {
-    return new ceres::AutoDiffCostFunction<GpsCostFunction3D, 3 /* residuals */,
+      const PoseGraph::ConstraintFixedFrame::PoseFixedFrame& pose) {
+    return new ceres::AutoDiffCostFunction<GpsCostFunction3D, 6 /* residuals */,
                                            4 /* rotation variables */,
                                            3 /* translation variables */>(
-        new GpsCostFunction3D(pose, relative_pose));
+        new GpsCostFunction3D(pose));
   }
 
   template <typename T>
-  bool operator()(const T* const c_ij_rotation, const T* const c_ij_translation,
-                  T* const e) const {
-    const std::array<T, 3> error = ScaleError(
-        ComputeFixedPosistionError(pose_.zbar_ij.translation(),
-                                   relative_pose_.zbar_ij.translation(),
-                                   c_ij_rotation, c_ij_translation),
-        pose_.translation_weight);
+  bool operator()(const T* const global_rotation,
+                  const T* const global_translation, T* const e) const {
+    const std::array<T, 6> error =
+        ScaleError(ComputeFixedPosistionError(pose_.zbar_ij, global_rotation,
+                                              global_translation),
+                   pose_.translation_xy_weight, pose_.translation_z_weight,
+                   pose_.rotation_yaw_weight, pose_.rotation_roll_pitch_weight);
     std::copy(std::begin(error), std::end(error), e);
     return true;
   }
 
  private:
-  explicit GpsCostFunction3D(const PoseGraph::Constraint::Pose& pose,
-                             const PoseGraph::Constraint::Pose& relative_pose)
-      : pose_(pose), relative_pose_(relative_pose) {}
+  explicit GpsCostFunction3D(
+      const PoseGraph::ConstraintFixedFrame::PoseFixedFrame& pose)
+      : pose_(pose) {}
 
-  const PoseGraph::Constraint::Pose pose_;
-  const PoseGraph::Constraint::Pose relative_pose_;
+  const PoseGraph::ConstraintFixedFrame::PoseFixedFrame pose_;
 };
 
 }  // namespace optimization

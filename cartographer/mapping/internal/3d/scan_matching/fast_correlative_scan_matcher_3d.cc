@@ -149,12 +149,12 @@ FastCorrelativeScanMatcher3D::MatchFullSubmap(
     const transform::Rigid3d& global_node_pose,
     const transform::Rigid3d& global_submap_pose,
     const TrajectoryNode::Data& constant_data, const float min_score,
-    double max_constraint_distance) const {
+    double max_constraint_xy_distance, double max_constraint_z_distance) const {
   const auto low_resolution_matcher = scan_matching::CreateLowResolutionMatcher(
       low_resolution_hybrid_grid_, &constant_data.low_resolution_point_cloud);
   const SearchParameters search_parameters{
-      common::RoundToInt(max_constraint_distance / resolution_),
-      common::RoundToInt(max_constraint_distance / resolution_),
+      common::RoundToInt(max_constraint_xy_distance / resolution_),
+      common::RoundToInt(max_constraint_z_distance / resolution_),
       options_.angular_search_window(), &low_resolution_matcher};
   return MatchWithSearchParameters(
       search_parameters, global_node_pose.cast<float>(),

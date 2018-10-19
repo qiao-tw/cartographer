@@ -27,7 +27,10 @@ message ConstraintBuilderOptions {
   double sampling_ratio = 1;
 
   // Threshold for poses to be considered near a submap.
-  double max_constraint_distance = 2;
+  double max_constraint_xy_distance = 2;
+
+  // Threshold for poses to be considered near a submap.
+  double max_constraint_z_distance = 3;
 
   // Threshold for the scan match score below which a match is not considered.
   // Low scores indicate that the scan and map do not look similar.

@@ -38,10 +38,16 @@ proto::OptimizationProblemOptions CreateOptimizationProblemOptions(
       parameter_dictionary->GetDouble("local_slam_pose_translation_weight"));
   options.set_local_slam_pose_rotation_weight(
       parameter_dictionary->GetDouble("local_slam_pose_rotation_weight"));
-  options.set_fixed_frame_pose_translation_weight(
-      parameter_dictionary->GetDouble("fixed_frame_pose_translation_weight"));
-  options.set_fixed_frame_pose_rotation_weight(
-      parameter_dictionary->GetDouble("fixed_frame_pose_rotation_weight"));
+  options.set_fixed_frame_pose_translation_xy_weight(
+      parameter_dictionary->GetDouble(
+          "fixed_frame_pose_translation_xy_weight"));
+  options.set_fixed_frame_pose_translation_z_weight(
+      parameter_dictionary->GetDouble("fixed_frame_pose_translation_z_weight"));
+  options.set_fixed_frame_pose_rotation_yaw_weight(
+      parameter_dictionary->GetDouble("fixed_frame_pose_rotation_yaw_weight"));
+  options.set_fixed_frame_pose_rotation_roll_pitch_weight(
+      parameter_dictionary->GetDouble(
+          "fixed_frame_pose_rotation_roll_pitch_weight"));
   options.set_log_solver_summary(
       parameter_dictionary->GetBool("log_solver_summary"));
   options.set_use_online_imu_extrinsics_in_3d(
