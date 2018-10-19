@@ -119,7 +119,7 @@ std::array<T, 6> ScaleError(const std::array<T, 6>& error,
 }
 
 template <typename T>
-static std::array<T, 6> ComputeFixedPosistionError(
+static std::array<T, 6> ComputeFixedFrameError(
     const transform::Rigid3d& constraint_pose, const T* const node_rotation,
     const T* const node_translation) {
   const Eigen::Quaternion<T> node_rotation_inverse =
@@ -129,6 +129,35 @@ static std::array<T, 6> ComputeFixedPosistionError(
   const Eigen::Matrix<T, 3, 1> angle_axis_difference =
       transform::RotationQuaternionToAngleAxisVector(
           node_rotation_inverse * constraint_pose.rotation().cast<T>());
+
+  T x_difference = T(constraint_pose.translation().x()) - node_translation[0];
+  T y_difference = T(constraint_pose.translation().y()) - node_translation[1];
+  T z_difference = T(constraint_pose.translation().z()) - node_translation[2];
+
+  return {{x_difference, y_difference, z_difference, angle_axis_difference[0],
+           angle_axis_difference[1], angle_axis_difference[2]}};
+}
+
+template <typename T>
+static std::array<T, 6> ComputeFixedFrameError(
+    const transform::Rigid3d& constraint_pose,
+    const transform::Rigid3d& relative_pose, const T* const start_rotation,
+    const T* const start_translation) {
+  const Eigen::Quaternion<T> submap_rotation =
+      Eigen::Quaternion<T>(start_rotation[0], start_rotation[1],
+                           start_rotation[2], start_rotation[3]);
+
+  const Eigen::Quaternion<T> node_rotation_inverse =
+      (submap_rotation * relative_pose.rotation().cast<T>()).inverse();
+
+  const Eigen::Matrix<T, 3, 1> angle_axis_difference =
+      transform::RotationQuaternionToAngleAxisVector(
+          node_rotation_inverse * constraint_pose.rotation().cast<T>());
+
+  typename transform::Rigid3<T>::Vector node_translation =
+      submap_rotation * relative_pose.cast<T>().translation() +
+      typename transform::Rigid3<T>::Vector(
+          start_translation[0], start_translation[1], start_translation[2]);
 
   T x_difference = T(constraint_pose.translation().x()) - node_translation[0];
   T y_difference = T(constraint_pose.translation().y()) - node_translation[1];

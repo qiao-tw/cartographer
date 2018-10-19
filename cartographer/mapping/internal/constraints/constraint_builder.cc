@@ -34,6 +34,8 @@ proto::ConstraintBuilderOptions CreateConstraintBuilderOptions(
       parameter_dictionary->GetDouble("max_constraint_xy_distance"));
   options.set_max_constraint_z_distance(
       parameter_dictionary->GetDouble("max_constraint_z_distance"));
+  options.set_max_constraint_angular_search_window(
+      parameter_dictionary->GetDouble("max_constraint_angular_search_window"));
   options.set_min_score(parameter_dictionary->GetDouble("min_score"));
   options.set_global_localization_min_score(
       parameter_dictionary->GetDouble("global_localization_min_score"));

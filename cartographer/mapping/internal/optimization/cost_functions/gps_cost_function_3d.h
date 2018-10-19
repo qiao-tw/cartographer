@@ -31,8 +31,8 @@ class GpsCostFunction3D {
   bool operator()(const T* const global_rotation,
                   const T* const global_translation, T* const e) const {
     const std::array<T, 6> error =
-        ScaleError(ComputeFixedPosistionError(pose_.zbar_ij, global_rotation,
-                                              global_translation),
+        ScaleError(ComputeFixedFrameError(pose_.zbar_ij, global_rotation,
+                                          global_translation),
                    pose_.translation_xy_weight, pose_.translation_z_weight,
                    pose_.rotation_yaw_weight, pose_.rotation_roll_pitch_weight);
     std::copy(std::begin(error), std::end(error), e);
@@ -45,6 +45,41 @@ class GpsCostFunction3D {
       : pose_(pose) {}
 
   const PoseGraph::ConstraintFixedFrame::PoseFixedFrame pose_;
+};
+
+class GpsSubmapCostFunction3D {
+ public:
+  static ceres::CostFunction* CreateAutoDiffCostFunction(
+      const PoseGraph::ConstraintFixedFrame::PoseFixedFrame& constraint_pose,
+      const transform::Rigid3d& relative_pose) {
+    return new ceres::AutoDiffCostFunction<
+        GpsSubmapCostFunction3D, 6 /* residuals */, 4 /* rotation variables */,
+        3 /* translation variables */>(
+        new GpsSubmapCostFunction3D(constraint_pose, relative_pose));
+  }
+
+  template <typename T>
+  bool operator()(const T* const submap_rotation,
+                  const T* const submap_translation, T* const e) const {
+    const std::array<T, 6> error = ScaleError(
+        ComputeFixedFrameError(constraint_pose_.zbar_ij, relative_pose_,
+                               submap_rotation, submap_translation),
+        constraint_pose_.translation_xy_weight,
+        constraint_pose_.translation_z_weight,
+        constraint_pose_.rotation_yaw_weight,
+        constraint_pose_.rotation_roll_pitch_weight);
+    std::copy(std::begin(error), std::end(error), e);
+    return true;
+  }
+
+ private:
+  explicit GpsSubmapCostFunction3D(
+      const PoseGraph::ConstraintFixedFrame::PoseFixedFrame& constraint_pose,
+      const transform::Rigid3d& relative_pose)
+      : constraint_pose_(constraint_pose), relative_pose_(relative_pose) {}
+
+  const PoseGraph::ConstraintFixedFrame::PoseFixedFrame constraint_pose_;
+  const transform::Rigid3d relative_pose_;
 };
 
 }  // namespace optimization

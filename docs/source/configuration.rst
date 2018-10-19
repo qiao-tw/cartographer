@@ -46,6 +46,9 @@ double max_constraint_xy_distance
 double max_constraint_z_distance
   Threshold for poses to be considered near a submap.
 
+double max_constraint_angular_search_window
+  Threshold for poses to be considered near a submap.
+
 double min_score
   Threshold for the scan match score below which a match is not considered.
   Low scores indicate that the scan and map do not look similar.

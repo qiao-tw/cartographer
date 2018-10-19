@@ -154,7 +154,8 @@ class ConstraintBuilder3D {
                          std::unique_ptr<Constraint>* constraint,
                          bool apply_search_window_full_submap = false,
                          double max_constraint_xy_distance = 0.0,
-                         double max_constraint_z_distance = 0.0)
+                         double max_constraint_z_distance = 0.0,
+                         double max_constraint_angular_search_window = 0.0)
       LOCKS_EXCLUDED(mutex_);
 
   void RunWhenDoneCallback() LOCKS_EXCLUDED(mutex_);

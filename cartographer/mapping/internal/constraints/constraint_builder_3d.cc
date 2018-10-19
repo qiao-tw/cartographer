@@ -155,7 +155,8 @@ void ConstraintBuilder3D::MaybeAddGlobalConstraint(
                       constant_data, global_node_pose, global_submap_pose,
                       *scan_matcher, constraint, true,
                       options_.max_constraint_xy_distance(),
-                      options_.max_constraint_z_distance());
+                      options_.max_constraint_z_distance(),
+                      options_.max_constraint_angular_search_window());
   });
   constraint_task->AddDependency(scan_matcher->creation_task_handle);
   auto constraint_task_handle =
@@ -226,7 +227,8 @@ void ConstraintBuilder3D::ComputeConstraint(
     const SubmapScanMatcher& submap_scan_matcher,
     std::unique_ptr<Constraint>* constraint,
     bool apply_search_window_full_submap, double max_constraint_xy_distance,
-    double max_constraint_z_distance) {
+    double max_constraint_z_distance,
+    double max_constraint_angular_search_window) {
   // FUNC_STAT_BEGIN
   CHECK(submap_scan_matcher.fast_correlative_scan_matcher);
   // The 'constraint_transform' (submap i <- node j) is computed from:
@@ -246,7 +248,8 @@ void ConstraintBuilder3D::ComputeConstraint(
           submap_scan_matcher.fast_correlative_scan_matcher->MatchFullSubmap(
               global_node_pose, global_submap_pose, *constant_data,
               options_.global_localization_min_score(),
-              max_constraint_xy_distance, max_constraint_z_distance);
+              max_constraint_xy_distance, max_constraint_z_distance,
+              max_constraint_angular_search_window);
     } else {
       match_result =
           submap_scan_matcher.fast_correlative_scan_matcher->MatchFullSubmap(

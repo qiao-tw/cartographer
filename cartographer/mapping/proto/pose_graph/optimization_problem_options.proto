@@ -45,17 +45,20 @@ message OptimizationProblemOptions {
   // odometry.
   double odometry_rotation_weight = 17;
 
-  // Scaling parameter for the FixedFramePose translation.
-  double fixed_frame_pose_translation_xy_weight = 20;
+  // Add fixed frame constraint to submap instead of node
+  bool fixed_frame_constraint_to_submap = 20;
 
   // Scaling parameter for the FixedFramePose translation.
-  double fixed_frame_pose_translation_z_weight = 21;
+  double fixed_frame_pose_translation_xy_weight = 21;
+
+  // Scaling parameter for the FixedFramePose translation.
+  double fixed_frame_pose_translation_z_weight = 22;
 
   // Scaling parameter for the FixedFramePose rotation.
-  double fixed_frame_pose_rotation_yaw_weight = 22;
+  double fixed_frame_pose_rotation_yaw_weight = 23;
 
   // Scaling parameter for the FixedFramePose rotation.
-  double fixed_frame_pose_rotation_roll_pitch_weight = 23;
+  double fixed_frame_pose_rotation_roll_pitch_weight = 24;
 
   // 3D only: fix Z.
   bool fix_z_in_3d = 13;

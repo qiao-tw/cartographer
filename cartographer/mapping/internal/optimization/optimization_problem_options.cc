@@ -38,6 +38,8 @@ proto::OptimizationProblemOptions CreateOptimizationProblemOptions(
       parameter_dictionary->GetDouble("local_slam_pose_translation_weight"));
   options.set_local_slam_pose_rotation_weight(
       parameter_dictionary->GetDouble("local_slam_pose_rotation_weight"));
+  options.set_fixed_frame_constraint_to_submap(
+      parameter_dictionary->GetBool("fixed_frame_constraint_to_submap"));
   options.set_fixed_frame_pose_translation_xy_weight(
       parameter_dictionary->GetDouble(
           "fixed_frame_pose_translation_xy_weight"));

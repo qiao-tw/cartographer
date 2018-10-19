@@ -294,6 +294,7 @@ void OptimizationProblem3D::Solve(
   MapById<SubmapId, CeresPose> C_submaps;
   MapById<NodeId, CeresPose> C_nodes;
   std::map<std::string, CeresPose> C_landmarks;
+  std::map<NodeId, std::vector<Constraint>> C_relatice_constraints;
   bool first_submap = true;
   bool freeze_landmarks = !frozen_trajectories.empty();
   for (const auto& submap_id_data : submap_data_) {
@@ -353,6 +354,7 @@ void OptimizationProblem3D::Solve(
         C_submaps.at(constraint.submap_id).translation(),
         C_nodes.at(constraint.node_id).rotation(),
         C_nodes.at(constraint.node_id).translation());
+    C_relatice_constraints[constraint.node_id].push_back(constraint);
   }
   // Add cost functions for landmarks.
   AddLandmarkCostFunctions(landmark_nodes, freeze_landmarks, node_data_,
@@ -526,12 +528,25 @@ void OptimizationProblem3D::Solve(
           options_.fixed_frame_pose_rotation_yaw_weight(),
           options_.fixed_frame_pose_rotation_roll_pitch_weight()};
 
-      problem.AddResidualBlock(
-          GpsCostFunction3D::CreateAutoDiffCostFunction(constraint_pose),
-          nullptr /* loss function */, C_nodes.at(node_id).rotation(),
-          C_nodes.at(node_id).translation());
+      if (options_.fixed_frame_constraint_to_submap()) {
+        for (const auto& relative_constraint :
+             C_relatice_constraints.at(node_id)) {
+          problem.AddResidualBlock(
+              GpsSubmapCostFunction3D::CreateAutoDiffCostFunction(
+                  constraint_pose, relative_constraint.pose.zbar_ij),
+              nullptr /* loss function */,
+              C_submaps.at(relative_constraint.submap_id).rotation(),
+              C_submaps.at(relative_constraint.submap_id).translation());
+        }
+      } else {
+        problem.AddResidualBlock(
+            GpsCostFunction3D::CreateAutoDiffCostFunction(constraint_pose),
+            nullptr /* loss function */, C_nodes.at(node_id).rotation(),
+            C_nodes.at(node_id).translation());
+      }
     }
   }
+
   // Solve.
   ceres::Solver::Summary summary;
   ceres::Solve(

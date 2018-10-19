@@ -32,6 +32,9 @@ message ConstraintBuilderOptions {
   // Threshold for poses to be considered near a submap.
   double max_constraint_z_distance = 3;
 
+  // Threshold for poses to be considered near a submap.
+  double max_constraint_angular_search_window = 6;
+
   // Threshold for the scan match score below which a match is not considered.
   // Low scores indicate that the scan and map do not look similar.
   double min_score = 4;
