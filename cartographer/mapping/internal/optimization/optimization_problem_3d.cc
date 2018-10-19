@@ -20,9 +20,11 @@
 #include <array>
 #include <cmath>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Eigen/Core"
@@ -100,6 +102,22 @@ std::unique_ptr<transform::Rigid3d> Interpolate(
             .transform);
   }
   return nullptr;
+}
+
+// Find a trajectory node closest to given timestamp
+std::pair<NodeId, NodeSpec3D> GetClosestNode(const MapById<NodeId, NodeSpec3D>& node_data, const common::Time& time) {
+  double min_time_diff = std::numeric_limits<double>::max();
+  std::pair<NodeId, NodeSpec3D> ret = std::make_pair<NodeId, NodeSpec3D>({-1, -1}, NodeSpec3D());
+  for (auto node_it = node_data.begin(); node_it != node_data.end(); ++node_it) {
+    const double time_diff = fabs(common::ToSeconds(node_it->data.time - time));
+    if (time_diff < min_time_diff) {
+      min_time_diff = time_diff;
+      const int trajectory_id = node_it->id.trajectory_id;
+      const int node_index = node_it->id.node_index;
+      ret = std::make_pair<NodeId, NodeSpec3D>({trajectory_id, node_index}, NodeSpec3D(node_it->data));
+    }
+  }
+  return ret;
 }
 
 // Selects a trajectory node closest in time to the landmark observation and
@@ -291,7 +309,6 @@ void OptimizationProblem3D::Solve(
   MapById<SubmapId, CeresPose> C_submaps;
   MapById<NodeId, CeresPose> C_nodes;
   std::map<std::string, CeresPose> C_landmarks;
-  std::map<NodeId, std::vector<Constraint>> C_relative_constraints;
   bool first_submap = true;
   bool freeze_landmarks = !frozen_trajectories.empty();
   for (const auto& submap_id_data : submap_data_) {
@@ -351,7 +368,6 @@ void OptimizationProblem3D::Solve(
         C_submaps.at(constraint.submap_id).translation(),
         C_nodes.at(constraint.node_id).rotation(),
         C_nodes.at(constraint.node_id).translation());
-    C_relative_constraints[constraint.node_id].push_back(constraint);
   }
   // Add cost functions for landmarks.
   AddLandmarkCostFunctions(landmark_nodes, freeze_landmarks, node_data_,
@@ -505,35 +521,31 @@ void OptimizationProblem3D::Solve(
   }
 
   // Add fixed frame pose constraints.
-  std::map<int, CeresPose> C_fixed_frames;
-  for (auto node_it = node_data_.begin(); node_it != node_data_.end();) {
-    const int trajectory_id = node_it->id.trajectory_id;
-    const auto trajectory_end = node_data_.EndOfTrajectory(trajectory_id);
-    if (!fixed_frame_pose_data_.HasTrajectory(trajectory_id)) {
-      node_it = trajectory_end;
-      continue;
-    }
+  for (const int trajectory_id : fixed_frame_pose_data_.trajectory_ids()) {
+    for (const auto& fixed_frame_pose_data : fixed_frame_pose_data_.trajectory(trajectory_id)) {
+      std::pair<NodeId, NodeSpec3D> node = GetClosestNode(node_data_, fixed_frame_pose_data.time);
+      NodeId node_id = node.first;
+      NodeSpec3D node_data = node.second;
+      if (node_id.trajectory_id < 0) { // didn't find any match
+        continue;
+      }
 
-    const NodeId node_id = node_it->id;
-    const NodeSpec3D& node_data = node_it->data;
-    const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
-        Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);
-    if (fixed_frame_pose == nullptr) {
-      continue;
-    }
-    const Constraint::Pose constraint_pose{
-        *fixed_frame_pose, options_.fixed_frame_pose_translation_weight(),
-        options_.fixed_frame_pose_rotation_weight()};
+      const std::unique_ptr<transform::Rigid3d> fixed_frame_pose =
+          Interpolate(fixed_frame_pose_data_, trajectory_id, node_data.time);
+      if (fixed_frame_pose == nullptr) {
+        continue;
+      }
+      const FixedFrameConstraint::Pose constraint_pose{
+          *fixed_frame_pose, options_.fixed_frame_pose_translation_xy_weight(),
+          options_.fixed_frame_pose_translation_z_weight(),
+          options_.fixed_frame_pose_rotation_yaw_weight(),
+          options_.fixed_frame_pose_rotation_roll_pitch_weight()};
 
-    for (const auto& relative_constraint : C_relative_constraints.at(node_id)) {
       problem.AddResidualBlock(
-          GpsCostFunction3D::CreateAutoDiffCostFunction(
-              constraint_pose, relative_constraint.pose),
-          nullptr /* loss function */,
-          C_submaps.at(relative_constraint.submap_id).rotation(),
-          C_submaps.at(relative_constraint.submap_id).translation());
+          GpsCostFunction3D::CreateAutoDiffCostFunction(constraint_pose),
+          nullptr /* loss function */, C_nodes.at(node_id).rotation(),
+          C_nodes.at(node_id).translation());
     }
-    ++node_it;
   }
   // Solve.
   ceres::Solver::Summary summary;
@@ -567,10 +579,6 @@ void OptimizationProblem3D::Solve(
   for (const auto& C_node_id_data : C_nodes) {
     node_data_.at(C_node_id_data.id).global_pose =
         C_node_id_data.data.ToRigid();
-  }
-  for (const auto& C_fixed_frame : C_fixed_frames) {
-    trajectory_data_.at(C_fixed_frame.first).fixed_frame_origin_in_map =
-        C_fixed_frame.second.ToRigid();
   }
   for (const auto& C_landmark : C_landmarks) {
     landmark_data_[C_landmark.first] = C_landmark.second.ToRigid();

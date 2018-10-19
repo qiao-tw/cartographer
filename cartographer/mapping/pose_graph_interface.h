@@ -52,6 +52,19 @@ class PoseGraphInterface {
     enum Tag { INTRA_SUBMAP, INTER_SUBMAP } tag;
   };
 
+  // For GPS usage, we should have more weight parameters.
+  struct FixedFrameConstraint {
+    struct Pose {
+      transform::Rigid3d zbar_ij;
+      double translation_xy_weight;
+      double translation_z_weight;
+      double rotation_yaw_weight;
+      double rotation_roll_pitch_weight;
+    };
+
+    Pose pose;
+  };
+
   struct LandmarkNode {
     struct LandmarkObservation {
       int trajectory_id;

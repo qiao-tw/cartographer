@@ -98,10 +98,10 @@ double odometry_translation_weight
 double odometry_rotation_weight
   Scaling parameter for rotation between consecutive nodes based on the odometry.
 
-double fixed_frame_pose_translation_weight
+double fixed_frame_pose_translation_xy_weight
   Scaling parameter for the FixedFramePose translation.
 
-double fixed_frame_pose_rotation_weight
+double fixed_frame_pose_rotation_yaw_weight
   Scaling parameter for the FixedFramePose rotation.
 
 bool log_solver_summary

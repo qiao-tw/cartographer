@@ -101,20 +101,41 @@ std::array<T, 6> ScaleError(const std::array<T, 6>& error,
 }
 
 template <typename T>
-static std::array<T, 3> ComputeFixedPosistionError(
-    const transform::Rigid3d::Vector& constraint_posistion,
-    const transform::Rigid3d::Vector& relative_position,
-    const T* const start_rotation, const T* const start_translation) {
-  const Eigen::Quaternion<T> R_i(start_rotation[0], start_rotation[1],
-                                 start_rotation[2], start_rotation[3]);
-  const Eigen::Matrix<T, 3, 1> reference_translation(
-      start_translation[0], start_translation[1], start_translation[2]);
-  const Eigen::Matrix<T, 3, 1> global_translation =
-      reference_translation + R_i * relative_position.cast<T>();
+std::array<T, 6> ScaleError(const std::array<T, 6>& error,
+                            double translation_xy_weight,
+                            double translation_z_weight,
+                            double rotation_yaw_weight,
+                            double rotation_roll_pitch_weight) {
+  // clang-format off
+  return {{
+      error[0] * translation_xy_weight,
+      error[1] * translation_xy_weight,
+      error[2] * translation_z_weight,
+      error[3] * rotation_roll_pitch_weight,
+      error[4] * rotation_roll_pitch_weight,
+      error[5] * rotation_yaw_weight
+  }};
+  // clang-format on
+}
 
-  return {{T(constraint_posistion.x()) - global_translation[0],
-           T(constraint_posistion.y()) - global_translation[1],
-           T(constraint_posistion.z()) - global_translation[2]}};
+template <typename T>
+static std::array<T, 6> ComputeFixedPosistionError(
+    const transform::Rigid3d& constraint_pose, const T* const node_rotation,
+    const T* const node_translation) {
+  const Eigen::Quaternion<T> node_rotation_inverse =
+      Eigen::Quaternion<T>(node_rotation[0], -node_rotation[1],
+                           -node_rotation[2], -node_rotation[3]);
+
+  const Eigen::Matrix<T, 3, 1> angle_axis_difference =
+      transform::RotationQuaternionToAngleAxisVector(
+          node_rotation_inverse * constraint_pose.rotation().cast<T>());
+
+  T x_difference = T(constraint_pose.translation().x()) - node_translation[0];
+  T y_difference = T(constraint_pose.translation().y()) - node_translation[1];
+  T z_difference = T(constraint_pose.translation().z()) - node_translation[2];
+
+  return {{x_difference, y_difference, z_difference, angle_axis_difference[0],
+           angle_axis_difference[1], angle_axis_difference[2]}};
 }
 
 template <typename T>
