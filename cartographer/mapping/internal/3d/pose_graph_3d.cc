@@ -312,7 +312,6 @@ WorkItem::Result PoseGraph3D::ComputeConstraintsForNode(
     const NodeId& node_id,
     std::vector<std::shared_ptr<const Submap3D>> insertion_submaps,
     const bool newly_finished_submap) {
-  // FUNC_STAT_BEGIN
   std::vector<SubmapId> submap_ids;
   std::vector<SubmapId> finished_submap_ids;
   std::set<NodeId> newly_finished_submap_node_ids;
@@ -387,10 +386,8 @@ WorkItem::Result PoseGraph3D::ComputeConstraintsForNode(
   ++num_nodes_since_last_loop_closure_;
   if (options_.optimize_every_n_nodes() > 0 &&
       num_nodes_since_last_loop_closure_ > options_.optimize_every_n_nodes()) {
-    // FUNC_STAT_END
     return WorkItem::Result::kRunOptimization;
   }
-  // FUNC_STAT_END
   return WorkItem::Result::kDoNotRunOptimization;
 }
 

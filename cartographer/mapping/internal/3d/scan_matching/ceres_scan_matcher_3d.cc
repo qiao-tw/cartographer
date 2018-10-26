@@ -76,7 +76,6 @@ void CeresScanMatcher3D::Match(
         point_clouds_and_hybrid_grids,
     transform::Rigid3d* const pose_estimate,
     ceres::Solver::Summary* const summary) {
-  //FUNC_STAT_BEGIN
   ceres::Problem problem;
   optimization::CeresPose ceres_pose(
       initial_pose_estimate, nullptr /* translation_parameterization */,
@@ -117,7 +116,6 @@ void CeresScanMatcher3D::Match(
   ceres::Solve(ceres_solver_options_, &problem, summary);
 
   *pose_estimate = ceres_pose.ToRigid();
-  //FUNC_STAT_END
 }
 
 }  // namespace scan_matching
