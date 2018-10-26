@@ -295,7 +295,7 @@ void OptimizationProblem3D::Solve(
   for (const auto& submap_id_data : submap_data_) {
     const bool frozen =
         frozen_trajectories.count(submap_id_data.id.trajectory_id) != 0;
-    if (first_submap) {
+    if (options_.fix_first_submap_in_3d() && first_submap) {
       first_submap = false;
       // Fix the first submap of the first trajectory except for allowing
       // gravity alignment.
