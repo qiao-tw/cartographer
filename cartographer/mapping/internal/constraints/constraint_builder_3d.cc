@@ -80,8 +80,12 @@ void ConstraintBuilder3D::MaybeAddConstraint(
     const NodeId& node_id, const TrajectoryNode::Data* const constant_data,
     const transform::Rigid3d& global_node_pose,
     const transform::Rigid3d& global_submap_pose) {
-  if ((global_node_pose.translation() - global_submap_pose.translation())
-          .norm() > options_.max_constraint_xy_distance()) {
+  // In 3D mapping, z-axis drift can be large if trajectory is long
+  cartographer::transform::Rigid3d::Vector global_node_xy = global_node_pose.translation();
+  global_node_xy.z() = 0;
+  cartographer::transform::Rigid3d::Vector global_submap_xy = global_submap_pose.translation();
+  global_submap_xy.z() = 0;
+  if ((global_node_xy - global_submap_xy).norm() > options_.max_constraint_xy_distance()) {
     return;
   }
   if (!sampler_.Pulse()) return;
@@ -229,7 +233,6 @@ void ConstraintBuilder3D::ComputeConstraint(
     bool apply_search_window_full_submap, double max_constraint_xy_distance,
     double max_constraint_z_distance,
     double max_constraint_angular_search_window) {
-  // FUNC_STAT_BEGIN
   CHECK(submap_scan_matcher.fast_correlative_scan_matcher);
   // The 'constraint_transform' (submap i <- node j) is computed from:
   // - a 'high_resolution_point_cloud' in node j and
@@ -267,7 +270,6 @@ void ConstraintBuilder3D::ComputeConstraint(
       kGlobalConstraintLowResolutionScoresMetric->Observe(
           match_result->low_resolution_score);
     } else {
-      // FUNC_STAT_END
       return;
     }
   } else {
@@ -285,7 +287,6 @@ void ConstraintBuilder3D::ComputeConstraint(
       kConstraintLowResolutionScoresMetric->Observe(
           match_result->low_resolution_score);
     } else {
-      // FUNC_STAT_END
       return;
     }
   }
@@ -337,7 +338,6 @@ void ConstraintBuilder3D::ComputeConstraint(
          << "%.";
     LOG(INFO) << info.str();
   }
-  // FUNC_STAT_END
 }
 
 void ConstraintBuilder3D::RunWhenDoneCallback() {

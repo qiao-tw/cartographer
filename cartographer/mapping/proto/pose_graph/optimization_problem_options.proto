@@ -63,6 +63,9 @@ message OptimizationProblemOptions {
   // 3D only: fix Z.
   bool fix_z_in_3d = 13;
 
+  // 3D only: fixe first submap
+  bool fix_first_submap_in_3d = 25;
+
   // 3D only: activate online IMU extrinsics.
   bool use_online_imu_extrinsics_in_3d = 18;
 

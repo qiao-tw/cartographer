@@ -264,10 +264,8 @@ void OptimizationProblem3D::Solve(
     const std::map<int, PoseGraphInterface::TrajectoryState>&
         trajectories_state,
     const std::map<std::string, LandmarkNode>& landmark_nodes) {
-  // FUNC_STAT_BEGIN
   if (node_data_.empty()) {
     // Nothing to optimize.
-    // FUNC_STAT_END
     return;
   }
 
@@ -300,7 +298,7 @@ void OptimizationProblem3D::Solve(
   for (const auto& submap_id_data : submap_data_) {
     const bool frozen =
         frozen_trajectories.count(submap_id_data.id.trajectory_id) != 0;
-    if (first_submap) {
+    if (options_.fix_first_submap_in_3d() && first_submap) {
       first_submap = false;
       // Fix the first submap of the first trajectory except for allowing
       // gravity alignment.
@@ -583,7 +581,6 @@ void OptimizationProblem3D::Solve(
   for (const auto& C_landmark : C_landmarks) {
     landmark_data_[C_landmark.first] = C_landmark.second.ToRigid();
   }
-  // FUNC_STAT_END
 }
 
 std::unique_ptr<transform::Rigid3d>
