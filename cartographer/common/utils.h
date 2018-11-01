@@ -28,6 +28,32 @@ ValueType* FindOrNull(MapType& map, const KeyType& key) {
   return &(it->second);
 }
 
+// gpal debug utils
+#include <chrono>
+#include <glog/logging.h>
+
+#define TRACE                       \
+  do {                              \
+    LOG(WARNING) << __FILE__ << ":" \
+                 << __func__ << ":" \
+                 << __LINE__;       \
+  } while (0);
+#if 0 // enable debug functions
+#define FUNC_STAT_BEGIN                                   \
+  static int s_##__func__##_called = 0;                   \
+  std::chrono::steady_clock::time_point                   \
+    __func__##begin, __func__##end;                       \
+  __func__##begin = std::chrono::steady_clock::now();
+
+#define FUNC_STAT_END                                       \
+  __func__##end   = std::chrono::steady_clock::now();       \
+  s_##__func__##_called++;                                  \
+  LOG(WARNING) << __func__ << ":" << __LINE__ << " #" << s_##__func__##_called \
+               << " exec time: " << std::chrono::duration_cast<std::chrono::microseconds>(__func__##end - __func__##begin).count() << " us";
+#else
+#define FUNC_STAT_BEGIN
+#define FUNC_STAT_END
+
 }  // namespace common
 }  // namespace cartographer
 
